@@ -1,9 +1,20 @@
-#include "Model.hpp"
-#include "Layer.hpp"
 #include "Dense.hpp"
+#include <memory>
 
+class Model{
+    public:
+        string name;
+        vector<Layer*> layers;
+        
+        Model(){}
 
-// ===== Helper functions to avoid writing make_unique every time =====
-std::unique_ptr<Dense> DenseLayer(const std::string& name, int in_f, int out_f) {
-    return std::make_unique<Dense>(name, in_f, out_f);
-}
+        // constructor taking an initializer_list of unique_ptrs
+        Model(vector<Layer*> list) {
+            layers = list;
+        }
+
+        Model(string name, vector<Layer*> list){
+            this->name = name;
+            layers = list;
+        }
+};

@@ -1,11 +1,10 @@
 #include <ostream>
 #include <cmath>
 #include <vector>
-#include "Value.hpp"
 #include "Layer.hpp"
 using namespace std;
 
-class Dense : Layer{
+class Dense : public Layer{
     public:
         vector<vector<double>> weights;
         vector<Value> values;

@@ -1,5 +1,3 @@
-#include <ostream>
-#include <cmath>
 #include <vector>
 #include "Value.hpp"
 
