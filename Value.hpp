@@ -8,28 +8,35 @@ class Value{
         double val;
         double grad;
 
-        Value(){
-            this->val = 0;
-            this->grad = 0;
-        }
-
-        Value(string label, double val=0, double grad=0){
+        Value(string label="", double val=0, double grad=0){
             this->val = val;
             this->grad = grad;
             this->label = label;
         }
 
         Value operator+(Value b){
-            return Value("("+this->label+"+"+b.label+")", this->val + b.val, 0);
+            return Value("("+this->label+"+"+b.label+")", this->val + b.val, this->grad + b.grad);
         }
         Value operator-(Value b){
-            return Value("("+this->label+"-"+b.label+")", this->val - b.val, 0);
+            return Value("("+this->label+"-"+b.label+")", this->val - b.val, this->grad + b.grad);
         }
         Value operator*(Value b){
-            return Value("("+this->label+"*"+b.label+")", this->val * b.val, 0);
+            return Value("("+this->label+"*"+b.label+")", this->val * b.val, this->grad * b.grad);
         }
         Value operator/(Value b){
-            return Value("("+this->label+"/"+b.label+")", this->val / b.val, 0);
+            return Value("("+this->label+"/"+b.label+")", this->val / b.val, this->grad * b.grad);
+        }
+        Value operator+(double b){
+            return Value("("+this->label+"+"+to_string(b)+")", this->val + b, this->grad);
+        }
+        Value operator-(double b){
+            return Value("("+this->label+"-"+to_string(b)+")", this->val - b, this->grad);
+        }
+        Value operator*(double b){
+            return Value("("+this->label+"*"+to_string(b)+")", this->val * b, this->grad);
+        }
+        Value operator/(double b){
+            return Value("("+this->label+"/"+to_string(b)+")", this->val / b, this->grad);
         }
         Value operator^(double p){
             return Value("("+this->label+'^'+to_string(p)+")", pow(this->val, p), 0);
