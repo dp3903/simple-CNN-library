@@ -22,5 +22,5 @@ int main(){
         new Softmax("softmax1",3)
     });
 
-    vector<double> loses = test_model.train(dataset, 10);
+    vector<double> loses = test_model.train(dataset, 100);
 }

@@ -24,23 +24,16 @@ class Model{
         }
 
         vector<double> run(vector<double> ip){
-            vector<Value> op;
-            for(double d: ip){
-                op.push_back(Value("input",d));
-            }
             for(Layer* l: layers){
                 try{
-                    op = l->forward(op);
+                    ip = l->forward(ip);
                 }
                 catch (const exception& e) {
                     std::cerr << "Error: " << e.what() << std::endl;
                     exit(1);
                 }
             }
-            vector<double> ans;
-            for(Value v: op)
-                ans.push_back(v.val);
-            return ans;
+            return ip;
         }
 
         vector<double> train(vector<pair<vector<double>,vector<double>>> dataset, int iterations=1){
@@ -53,12 +46,21 @@ class Model{
                 
                     try{
                         iteration_loss += this->loss->calculate(op,sample.second);
+                        vector<double> op_grads = vector<double>(op.size());
+                        for(int u=0 ; u<op.size() ; u++){
+                            op_grads[u] = (op[u] - sample.second[u]) / sqrt(op.size());
+                        }
+                        for(int u=layers.size()-1 ; u>=0 ; u--)
+                            op_grads = layers[u]->back_prop(op_grads);
                     }
                     catch (const exception& e) {
                         std::cerr << "Error: " << e.what() << std::endl;
                         exit(1);
                     }
                 }
+                for(Layer* l: layers)
+                    l->update_weights(0.1);
+
                 loses[i] = iteration_loss;
                 cout<<"Iteration: "<<i<<" Loss: "<<iteration_loss<<'\r';
             }
