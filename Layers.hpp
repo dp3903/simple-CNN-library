@@ -1,5 +1,12 @@
 #include <vector>
+#include <iostream>
 #include "Value.hpp"
+
+double generate_random_in_range(double low, double high){
+    if(high < low)
+        swap(high,low);
+    return (double(rand()) / RAND_MAX)*(high-low) + low;
+}
 
 class Layer{
     public:
@@ -11,11 +18,11 @@ class Layer{
         }
 
         virtual vector<double> forward(vector<double> input){
-            throw runtime_error("Invalid input.");
+            throw runtime_error("Invalid input for layer: "+this->label+".");
         }
 
         virtual vector<vector<double>> forward(vector<vector<double>> input){
-            throw runtime_error("Invalid input.");
+            throw runtime_error("Invalid input for layer: "+this->label+".");
         }
         
         virtual vector<double> back_prop(vector<double> grads) = 0;
@@ -35,17 +42,17 @@ class Dense : public Layer{
             this->input = vector<double>(input_size);
             for(int i=0 ; i < weights.size() ; i++){
                 for(int j=0 ; j < weights[i].size() ; j++){
-                    weights[i][j] = Value("Dense: "+this->label+" param("+to_string(i)+','+to_string(j)+").", double(rand()) / RAND_MAX);
+                    weights[i][j] = Value("Dense: "+this->label+" param("+to_string(i)+','+to_string(j)+").", generate_random_in_range(-0.1, 0.1));
                 }
             }
         }
 
         vector<double> forward(vector<double> input){
             if(!weights.size() || !input.size() || !(this->input.size())){
-                throw runtime_error("Cannot forword on empty layer.");
+                throw runtime_error("Cannot forword on empty layer for layer: "+this->label+".");
             }
             if(this->input.size() != input.size())
-                throw runtime_error("Input size does not match expected input size.");
+                throw runtime_error("Input size does not match expected input size for layer: "+this->label+".");
 
             this->input = input;
             vector<double> op = vector<double>(weights.size(), 0);
@@ -55,6 +62,12 @@ class Dense : public Layer{
                         op[i] += (input[j] * weights[i][j].val);
                     }
                 }
+
+                // cout<<this->label<<":[ ";
+                // for(double d: op)
+                //     cout<<d<<", ";
+                // cout<<"\b\b ]\n";
+
                 return op;
             }
             catch(string s){
@@ -64,9 +77,9 @@ class Dense : public Layer{
 
         vector<double> back_prop(vector<double> grads){
             if(!grads.size())
-                throw runtime_error("Cannot backprop on empty grads.");
+                throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
             if(grads.size() != weights.size())
-                throw runtime_error("Input grads size does not match no. of neurons.");
+                throw runtime_error("Input grads size does not match no. of neurons for layer: "+this->label+".");
 
             vector<double> op = vector<double>(weights[0].size(), 0);
             for(int i=0 ; i<weights.size() ; i++){
@@ -75,6 +88,12 @@ class Dense : public Layer{
                     op[j] += weights[i][j].val * grads[i];
                 }
             }
+
+            // cout<<this->label<<":[ ";
+            // for(double d: op)
+            //     cout<<d<<", ";
+            // cout<<"\b\b ]\n";
+
             return op;
         }
 
@@ -113,10 +132,90 @@ class Softmax : public Layer{
             for(int i=0 ; i < input.size() ; i++){
                 op[i] = op[i] / sum;
             }
+
+            // cout<<this->label<<" output:[ ";
+            // for(double d: op)
+            //     cout<<d<<", ";
+            // cout<<"\b\b ]\n";
+
             return op;
         }
 
         vector<double> back_prop(vector<double> grads){
+            if(!grads.size())
+                throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
+            if(grads.size() != input.size())
+                throw runtime_error("grads size does not match no. of inputs for layer: "+this->label+".");
+
+            // vector<double> op = vector<double>(grads.size(), 0);
+            // double exps[input.size()];
+            // double sum=0;
+            // for(int i=0 ; i<input.size() ; i++){
+            //     exps[i] = exp(input[i]);
+            //     sum += exps[i];
+            // }
+            // for(int i=0 ; i<input.size() ; i++){
+            //     for(int j=0 ; j<input.size() ; j++){
+            //         op[i] += grads[i] * (exps[i]/sum) * ((i==j ? 1 : 0)-exps[j]/sum);
+            //     }
+            // }
+
+            // // cout<<this->label<<" grads:[ ";
+            // // for(double d: op)
+            // //     cout<<d<<", ";
+            // // cout<<"\b\b ]\n";
+
+            // return op;
+
+            return grads;
+        }
+
+        void update_weights(double lr = 0.1){}
+};
+
+class ReLU : public Layer{
+    public:
+        vector<double> input;
+
+        ReLU(){}
+
+        ReLU(string label, int size){
+            this->label = label;
+            this->input = vector<double>(size);
+        }
+
+        vector<double> forward(vector<double> input){
+            if(input.size() != this->input.size()){
+                throw runtime_error("Invalid input size for softmax layer: "+this->label);
+            }
+            this->input = input;
+            for(int i=0 ; i<input.size() ; i++)
+                if(input[i] < 0)
+                    input[i] = 0;
+
+            // cout<<this->label<<":[ ";
+            // for(double d: input)
+            //     cout<<d<<", ";
+            // cout<<"\b\b ]\n";
+
+            return input;
+        }
+
+        vector<double> back_prop(vector<double> grads){
+            if(!grads.size())
+                throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
+            if(grads.size() != input.size())
+                throw runtime_error("grads size does not match no. of inputs for layer: "+this->label+".");
+
+            for(int i = 0 ; i < grads.size() ; i++)
+                if(input[i] <= 0)
+                    grads[i] = 0;
+            
+            // cout<<this->label<<":[ ";
+            // for(double d: grads)
+            //     cout<<d<<", ";
+            // cout<<"\b\b ]\n";
+
             return grads;
         }
 

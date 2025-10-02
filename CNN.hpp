@@ -1,6 +1,7 @@
 #include "Layers.hpp"
 #include "Losses.hpp"
 #include <memory>
+#include <iomanip>
 #include <iostream>
 
 class Model{
@@ -36,13 +37,22 @@ class Model{
             return ip;
         }
 
-        vector<double> train(vector<pair<vector<double>,vector<double>>> dataset, int iterations=1){
+        vector<double> train(vector<pair<vector<double>,vector<double>>> dataset, int iterations=1, double learning_rate=0.1){
             vector<double> loses = vector<double>(iterations);
-            cout<<"\n===============Training Starting===============\n";
+            // cout<<"\n===============Batch Training Starting===============\n";
             for(int i=0 ; i < iterations ; i++){
                 double iteration_loss = 0.0;
                 for(pair<vector<double>,vector<double>> sample : dataset){
                     vector<double> op = this->run(sample.first);
+
+                    // cout<<setw(20)<<"Predicted output: [ ";
+                    // for(double d: op)
+                    //     cout<<d<<", ";
+                    // cout<<"\b\b ]\n";
+                    // cout<<setw(20)<<"Actual output: [ ";
+                    // for(double d: sample.second)
+                    //     cout<<d<<", ";
+                    // cout<<"\b\b ]\n";
                 
                     try{
                         iteration_loss += this->loss->calculate(op,sample.second);
@@ -59,12 +69,12 @@ class Model{
                     }
                 }
                 for(Layer* l: layers)
-                    l->update_weights(0.1);
+                    l->update_weights(learning_rate);
 
-                loses[i] = iteration_loss;
-                cout<<"Iteration: "<<i<<" Loss: "<<iteration_loss<<'\r';
+                loses[i] = iteration_loss/dataset.size();
+                // cout<<"Iteration: "<<i<<" Loss: "<<loses[i]<<'\r';
             }
-            cout<<"\n===============Training Complete===============\n";
+            // cout<<"\n===============Batch Training Complete===============\n";
             return loses;
         }
 };
