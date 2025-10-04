@@ -25,7 +25,22 @@ class Layer{
             throw runtime_error("Invalid input for layer: "+this->label+".");
         }
         
-        virtual vector<double> back_prop(vector<double> grads) = 0;
+        virtual vector<vector<vector<double>>> forward(vector<vector<vector<double>>> input){
+            throw runtime_error("Invalid input for layer: "+this->label+".");
+        }
+        
+        virtual vector<double> back_prop(vector<double> grads){
+            throw runtime_error("Invalid gradients for layer: "+this->label+".");
+        }
+
+        virtual vector<vector<double>> back_prop(vector<vector<double>> grads){
+            throw runtime_error("Invalid gradients for layer: "+this->label+".");
+        }
+
+        virtual vector<vector<vector<double>>> back_prop(vector<vector<vector<double>>> grads){
+            throw runtime_error("Invalid gradients for layer: "+this->label+".");
+        }
+        
         virtual void update_weights(double learning_rate = 0.1) = 0;
 };
 
@@ -102,6 +117,103 @@ class Dense : public Layer{
                 for(int j=0 ; j<weights[i].size() ; j++){
                     weights[i][j].val -= learning_rate * weights[i][j].grad;
                     weights[i][j].grad = 0;
+                }
+            }
+        }
+};
+
+class Conv2d : public Layer{
+    public:
+        vector<vector<vector<vector<Value>>>> filters;
+        vector<vector<vector<double>>> input;
+        int stride;
+        int padding;
+        int filter_size;
+        tuple<int,int,int> input_dim;
+        tuple<int,int,int> output_dim;
+
+        Conv2d(){}
+
+        Conv2d(string label, tuple<int,int,int> input_dim, int filter_size, int no_of_filters, int stride=1, int padding=0){
+            if(stride <= 0)
+                throw runtime_error("Stride cannot be 0 or negative for Conv2d layer: "+label);
+            if(padding < 0)
+                throw runtime_error("Padding cannot be negative for Conv2d layer: "+label);
+            if(get<0>(input_dim)<=0 || get<1>(input_dim)<=0 || get<2>(input_dim)<=0)
+                throw runtime_error("Input dimension cannot be less than 0 for Conv2d layer: "+label);
+
+            this->label = label;
+            this->input_dim = input_dim;
+            this->output_dim = {
+                ((get<0>(input_dim) + 2*padding - filter_size) / stride + 1),
+                ((get<1>(input_dim) + 2*padding - filter_size) / stride + 1),
+                no_of_filters
+            };
+            this->filters = vector<vector<vector<vector<Value>>>>(no_of_filters, vector<vector<vector<Value>>>(get<2>(input_dim), vector<vector<Value>>(filter_size, vector<Value>(filter_size))));
+            this->input = vector<vector<vector<double>>>(get<2>(input_dim), vector<vector<double>>(get<0>(input_dim), vector<double>(get<1>(input_dim))));
+            this->stride = stride;
+            this->filter_size = filter_size;
+            this->padding = padding;
+            for(int i=0 ; i < filters.size() ; i++){
+                for(int j=0 ; j < filters[i].size() ; j++){
+                    for(int k=0 ; k < filters[i][j].size() ; k++){
+                        for(int l=0 ; l < filters[i][j][k].size() ; l++){
+                            filters[i][j][k][l] = Value(
+                                "Conv2d: "+this->label+" param("+to_string(i)+','+to_string(j)+','+to_string(k)+','+to_string(l)+").",
+                                generate_random_in_range(-0.1, 0.1)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        vector<vector<vector<double>>> forward(vector<vector<vector<double>>> input){
+            if(input.size() != get<2>(input_dim))
+                throw runtime_error("Invalid input dimensions for layer: "+this->label);
+            
+            vector<vector<vector<double>>> ans = vector<vector<vector<double>>>(get<2>(output_dim), vector<vector<double>>(get<0>(output_dim), vector<double>(get<1>(output_dim),0)));
+            for (int oc = 0; oc < get<2>(output_dim); oc++) {
+                for (int out_x = 0; out_x < get<0>(output_dim); out_x++) {
+                    for (int out_y = 0; out_y < get<1>(output_dim); out_y++) {
+                        double sum = 0.0;
+                        for (int ic = 0; ic < get<2>(input_dim); ic++) {
+                            for (int i = 0; i < filter_size; i++) {
+                                for (int j = 0; j < filter_size; j++) {
+                                    int in_x = out_x * stride + i - padding;
+                                    int in_y = out_y * stride + j - padding;
+                                    if (in_x >= 0 && in_x < get<0>(input_dim) &&
+                                        in_y >= 0 && in_y < get<1>(input_dim)) {
+                                        sum += filters[oc][ic][i][j].val * input[ic][in_x][in_y];
+                                    }
+                                }
+                            }
+                        }
+                        ans[oc][out_x][out_y] = sum;
+                    }
+                }
+            }
+
+            this -> input = input;
+
+            return ans;
+        }
+        
+        vector<vector<vector<double>>> back_prop(vector<vector<vector<double>>> grads){
+            vector<vector<vector<double>>> ans;
+
+            return ans;
+        }
+
+        void update_weights(double learning_rate = 0.1){
+            for(int i=0 ; i < filters.size() ; i++){
+                for(int j=0 ; j < filters[i].size() ; j++){
+                    for(int k=0 ; k < filters[i][j].size() ; k++){
+                        for(int l=0 ; l < filters[i][j][k].size() ; l++){
+                            filters[i][j][k][l].val -= learning_rate * filters[i][j][k][l].grad;
+                            filters[i][j][k][l].grad = 0;
+                        }
+                    }
                 }
             }
         }

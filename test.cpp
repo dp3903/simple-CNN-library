@@ -87,7 +87,7 @@ int main(){
     });
     
     int n_epochs = 5;
-    int n_iterations = 100;
+    int n_iterations = 1;
     int batch_size = 1;
     int dataset_size = 10;
     string file_path = "./archive/mnist_train.csv";
