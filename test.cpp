@@ -9,8 +9,6 @@
 #include <vector>
 #include <string>
 using namespace std;
-using Batch = vector<pair<vector<double>,vector<double>>>;
-using Data = pair<vector<double>,vector<double>>;
 
 
 // Reads a batch of MNIST samples from CSV
@@ -26,7 +24,7 @@ Batch load_mnist_batch(const string& filename, size_t batch_size, size_t start_l
         getline(file, header);
     }
 
-    vector<pair<vector<double>,vector<double>>> batch;
+    Batch batch;
     batch.reserve(batch_size);
 
     string line;
@@ -66,20 +64,8 @@ Batch load_mnist_batch(const string& filename, size_t batch_size, size_t start_l
     return batch;
 }
 
-
-// each training example: (input_vector, label_vector)
-// vector< pair< vector<double>, vector<double> > > dataset = {
-//     {{0.12, 0.55, 0.33, 0.78, 0.90, 0.14, 0.66, 0.42, 0.81, 0.27}, {1, 0, 0}},
-//     {{0.99, 0.05, 0.47, 0.31, 0.22, 0.63, 0.15, 0.82, 0.74, 0.40}, {0, 1, 0}},
-//     {{0.34, 0.71, 0.59, 0.20, 0.88, 0.41, 0.13, 0.93, 0.56, 0.77}, {0, 0, 1}},
-//     {{0.25, 0.36, 0.91, 0.44, 0.58, 0.07, 0.62, 0.83, 0.19, 0.52}, {1, 0, 0}},
-//     {{0.80, 0.68, 0.29, 0.55, 0.17, 0.33, 0.71, 0.09, 0.47, 0.61}, {0, 1, 0}},
-//     {{0.06, 0.88, 0.23, 0.39, 0.50, 0.77, 0.84, 0.28, 0.62, 0.19}, {0, 0, 1}},
-//     {{0.45, 0.11, 0.95, 0.70, 0.08, 0.53, 0.22, 0.41, 0.64, 0.87}, {1, 0, 0}},
-//     {{0.73, 0.12, 0.38, 0.49, 0.21, 0.96, 0.65, 0.34, 0.59, 0.07}, {0, 1, 0}},
-//     {{0.19, 0.27, 0.54, 0.62, 0.85, 0.43, 0.31, 0.08, 0.97, 0.75}, {0, 0, 1}},
-//     {{0.92, 0.44, 0.36, 0.51, 0.26, 0.67, 0.15, 0.79, 0.33, 0.58}, {1, 0, 0}}
-// };
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void test_ann(){
     
@@ -110,8 +96,9 @@ void test_ann(){
         for(double d: op)
             cout<<d<<", ";
         cout<<"\b\b ]\n";
+        Tensor1D actual_op = std::get<Tensor1D>(data.second);
         cout<<setw(20)<<"Actual output: [ ";
-        for(double d: data.second)
+        for(double d: actual_op)
             cout<<d<<", ";
         cout<<"\b\b ]\n";
     }
@@ -168,14 +155,15 @@ void test_ann(){
         for(double d: op)
             cout<<d<<", ";
         cout<<"\b\b ]\n";
+        Tensor1D actual_op = std::get<Tensor1D>(data.second);
         cout<<setw(20)<<"Actual output: [ ";
-        for(double d: data.second)
+        for(double d: actual_op)
             cout<<d<<", ";
         cout<<"\b\b ]\n";
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void test_op(){
 
@@ -190,8 +178,7 @@ void test_op(){
     cout<<a<<'\n'<<b<<'\n'<<(a+b)<<endl;     
 }
 
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void test_convolution(){
     
@@ -271,6 +258,8 @@ void test_convolution(){
         cout << in_grads[ic] << endl;
     }
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void testing_flatten(){
     Tensor3D ip = Tensor3D(3, Tensor2D(2, Tensor1D(2)));

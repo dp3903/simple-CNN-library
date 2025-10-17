@@ -5,11 +5,6 @@
 #include <type_traits>
 #include "Overloads.hpp"
 
-// Use type aliases for readability. Place them here for class-wide scope.
-using Tensor1D = std::vector<double>;
-using Tensor2D = std::vector<std::vector<double>>;
-using Tensor3D = std::vector<std::vector<std::vector<double>>>;
-
 
 double generate_random_in_range(double low, double high){
     if(high < low)
@@ -27,36 +22,11 @@ class Layer{
             this->label = name;
         }
 
-        // virtual Tensor1D forward(Tensor1D input){
-        //     throw runtime_error("Invalid input for layer: "+this->label+".");
-        // }
-
-        // virtual Tensor2D forward(Tensor2D input){
-        //     throw runtime_error("Invalid input for layer: "+this->label+".");
-        // }
-        
-        // virtual Tensor3D forward(Tensor3D input){
-        //     throw runtime_error("Invalid input for layer: "+this->label+".");
-        // }
-        
-        // virtual Tensor1D back_prop(Tensor1D grads){
-        //     throw runtime_error("Invalid gradients for layer: "+this->label+".");
-        // }
-
-        // virtual Tensor2D back_prop(Tensor2D grads){
-        //     throw runtime_error("Invalid gradients for layer: "+this->label+".");
-        // }
-
-        // virtual Tensor3D back_prop(Tensor3D grads){
-        //     throw runtime_error("Invalid gradients for layer: "+this->label+".");
-        // }
-
-        // testing with unified signature
-        virtual variant<Tensor1D,Tensor2D,Tensor3D> forward(variant<Tensor1D,Tensor2D,Tensor3D> input){
+        virtual Tensor forward(Tensor input){
             throw runtime_error("Invalid input for layer: "+this->label+".");
         }
 
-        virtual variant<Tensor1D,Tensor2D,Tensor3D> back_prop(variant<Tensor1D,Tensor2D,Tensor3D> grads){
+        virtual Tensor back_prop(Tensor grads){
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
 
@@ -82,7 +52,7 @@ class Dense : public Layer{
             }
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> forward(const variant<Tensor1D,Tensor2D,Tensor3D> t_input){
+        Tensor forward(const Tensor t_input){
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Dense layer: "+this->label+".");
             
@@ -115,7 +85,7 @@ class Dense : public Layer{
             }
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> back_prop(const variant<Tensor1D,Tensor2D,Tensor3D> t_grads){
+        Tensor back_prop(const Tensor t_grads){
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Dense layer: "+this->label+".");
             
@@ -282,7 +252,7 @@ class Conv2d : public Layer{
             return ans;
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> forward(variant<Tensor1D,Tensor2D,Tensor3D> t_input){
+        Tensor forward(Tensor t_input){
             if(!holds_alternative<Tensor3D>(t_input))
                 throw runtime_error("Invalid input Tensor to Conv2d layer: "+this->label+".");
             
@@ -304,7 +274,7 @@ class Conv2d : public Layer{
             return ans;
         }
         
-        variant<Tensor1D,Tensor2D,Tensor3D> back_prop(variant<Tensor1D,Tensor2D,Tensor3D> t_grads){
+        Tensor back_prop(Tensor t_grads){
             if(!holds_alternative<Tensor3D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Conv2d layer: "+this->label+".");
             
@@ -362,7 +332,7 @@ class Flatten : public Layer{
             this->label = label;
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> forward(variant<Tensor1D,Tensor2D,Tensor3D> t_input) {
+        Tensor forward(Tensor t_input) {
             if(holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Flatten layer: "+this->label+".");
             
@@ -386,7 +356,7 @@ class Flatten : public Layer{
             return output;
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> back_prop(variant<Tensor1D,Tensor2D,Tensor3D> t_grads) {
+        Tensor back_prop(Tensor t_grads) {
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Flatten layer: "+this->label+".");
 
@@ -427,7 +397,7 @@ class Softmax : public Layer{
             this->label = label;
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> forward(const variant<Tensor1D,Tensor2D,Tensor3D> t_input){
+        Tensor forward(const Tensor t_input){
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
 
@@ -450,7 +420,7 @@ class Softmax : public Layer{
             return op;
         }
 
-        variant<Tensor1D,Tensor2D,Tensor3D> back_prop(const variant<Tensor1D,Tensor2D,Tensor3D> t_grads){
+        Tensor back_prop(const Tensor t_grads){
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
             
@@ -486,122 +456,6 @@ class Softmax : public Layer{
         void update_weights(double lr = 0.1){}
 };
 
-// class ReLU : public Layer{
-//     public:
-//         variant<
-//             vector<double>,
-//             vector<vector<double>>,
-//             vector<vector<vector<double>>>,
-//         > input;
-
-//         ReLU(){}
-
-//         ReLU(string label){
-//             this->label = label;
-//         }
-        
-
-//         vector<double> forward(vector<double> input){
-//             this->input = input;
-//             for(int i=0 ; i<input.size() ; i++)
-//                 if(input[i] < 0)
-//                     input[i] = 0;
-
-//             // cout<<this->label<<":[ ";
-//             // for(double d: input)
-//             //     cout<<d<<", ";
-//             // cout<<"\b\b ]\n";
-
-//             return input;
-//         }
-
-//         vector<double> back_prop(vector<double> grads){
-//             if(!grads.size())
-//                 throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
-//             if(!holds_alternative<vector<double>>(this->input))
-//                 throw runtime_error("Invalid grads dimension for ReLU layer: "+this->label);
-//             if(grads.size() != get<vector<double>>(this->input).size())
-//                 throw runtime_error("grads size does not match no. of inputs for layer: "+this->label+".");
-
-//             for(int i = 0 ; i < grads.size() ; i++)
-//                 if(get<vector<double>>(this->input)[i] <= 0)
-//                     grads[i] = 0;
-            
-//             // cout<<this->label<<":[ ";
-//             // for(double d: grads)
-//             //     cout<<d<<", ";
-//             // cout<<"\b\b ]\n";
-
-//             return grads;
-//         }
-        
-//         vector<vector<double>> forward(vector<vector<double>> input){
-//             this->input = input;
-//             for(int i=0 ; i<input.size() ; i++)
-//                 for(int j=0 ; j<input[i].size() ; j++)
-//                     if(input[i][j] < 0)
-//                         input[i][j] = 0;
-
-//             return input;
-//         }
-
-//         vector<vector<double>> back_prop(vector<vector<double>> grads){
-//             if(!grads.size())
-//                 throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
-//             if(!holds_alternative<vector<vector<double>>>(this->input))
-//                 throw runtime_error("Invalid grads dimension for ReLU layer: "+this->label);
-//             if(grads.size() != get<vector<vector<double>>>(this->input).size())
-//                 throw runtime_error("grads size does not match no. of inputs along x-axis for layer: "+this->label+".");
-                
-//             for(int i = 0 ; i < grads.size() ; i++){
-//                 if(grads[i].size() != get<vector<vector<double>>>(this->input)[i].size())
-//                     throw runtime_error("grads size does not match no. of inputs aling y-axis for layer: "+this->label+".");
-//                 for(int j = 0 ; j < grads[i].size() ; j++){
-//                     if(get<vector<vector<double>>>(this->input)[i][j] <= 0)
-//                         grads[i][j] = 0;
-//                 }
-//             }
-
-//             return grads;
-//         }
-        
-//         vector<vector<vector<double>>> forward(vector<vector<vector<double>>> input){
-//             this->input = input;
-//             for(int i=0 ; i<input.size() ; i++)
-//                 for(int j=0 ; j<input[i].size() ; j++)
-//                     for(int k=0 ; k<input[i][j].size() ; k++)
-//                         if(input[i][j][k] < 0)
-//                             input[i][j][k] = 0;
-
-//             return input;
-//         }
-
-//         vector<vector<vector<double>>> back_prop(vector<vector<vector<double>>> grads){
-//             if(!grads.size())
-//                 throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
-//             if(!holds_alternative<vector<vector<vector<double>>>>(this->input))
-//                 throw runtime_error("Invalid grads dimension for ReLU layer: "+this->label);
-//             if(grads.size() != get<vector<vector<vector<double>>>>(this->input).size())
-//                 throw runtime_error("grads size does not match no. of inputs along channels for layer: "+this->label+".");
-                
-//             for(int i = 0 ; i < grads.size() ; i++){
-//                 if(grads[i].size() != get<vector<vector<vector<double>>>>(this->input)[i].size())
-//                     throw runtime_error("grads size does not match no. of inputs aling x-axis for layer: "+this->label+".");
-//                 for(int j = 0 ; j < grads[i].size() ; j++){
-//                     if(grads[i][j].size() != get<vector<vector<vector<double>>>>(this->input)[i][j].size())
-//                         throw runtime_error("grads size does not match no. of inputs aling y-axis for layer: "+this->label+".");
-//                     for(int k = 0 ; k < grads[i][j].size() ; k++)
-//                         if(get<vector<vector<vector<double>>>>(this->input)[i][j][k] <= 0)
-//                             grads[i][j][k] = 0;
-//                 }
-//             }
-
-//             return grads;
-//         }
-
-//         void update_weights(double lr = 0.1){}
-// };
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Gemini-2.5-pro version4903
@@ -609,14 +463,14 @@ class ReLU : public Layer {
 public:
 
     // The cache for the input from the forward pass
-    std::variant<Tensor1D, Tensor2D, Tensor3D> input_cache;
+    Tensor input_cache;
 
     ReLU() {}
     ReLU(std::string label) {
         this->label = label;
     }
 
-    variant<Tensor1D,Tensor2D,Tensor3D> forward(variant<Tensor1D,Tensor2D,Tensor3D> t_input) {
+    Tensor forward(Tensor t_input) {
         this->input_cache = t_input; // Store original input
         if(holds_alternative<Tensor1D>(t_input)){
             Tensor1D& temp = std::get<Tensor1D>(t_input);
@@ -642,7 +496,7 @@ public:
         return t_input;
     }
 
-    variant<Tensor1D,Tensor2D,Tensor3D> back_prop(variant<Tensor1D,Tensor2D,Tensor3D> t_grads) {
+    Tensor back_prop(Tensor t_grads) {
         if(holds_alternative<Tensor1D>(t_grads)){
             Tensor1D& temp = std::get<Tensor1D>(input_cache);
             Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
