@@ -22,11 +22,11 @@ class Layer{
             this->label = name;
         }
 
-        virtual Tensor forward(Tensor input){
+        virtual Tensor forward(Tensor& input){
             throw runtime_error("Invalid input for layer: "+this->label+".");
         }
 
-        virtual Tensor back_prop(Tensor grads){
+        virtual Tensor back_prop(Tensor& grads){
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
 
@@ -52,7 +52,7 @@ class Dense : public Layer{
             }
         }
 
-        Tensor forward(const Tensor t_input){
+        Tensor forward(Tensor& t_input){
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Dense layer: "+this->label+".");
             
@@ -61,7 +61,7 @@ class Dense : public Layer{
                 throw runtime_error("Cannot forword on empty layer for layer: "+this->label+".");
             }
             if(this->input.size() != input.size())
-                throw runtime_error("Input size does not match expected input size for layer: "+this->label+".");
+                throw runtime_error("Input size does not match expected input size for layer: "+this->label+". expected "+to_string(this->input.size())+" recieved "+to_string(input.size())+".");
                 
             this->input = input;
             vector<double> op = vector<double>(weights.size(), 0);
@@ -85,7 +85,7 @@ class Dense : public Layer{
             }
         }
 
-        Tensor back_prop(const Tensor t_grads){
+        Tensor back_prop(Tensor& t_grads){
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Dense layer: "+this->label+".");
             
@@ -121,7 +121,7 @@ class Dense : public Layer{
         }
 };
 
-class Conv2d : public Layer{
+class Conv2D : public Layer{
     public:
         vector<vector<vector<vector<Value>>>> filters;
         Tensor3D input;
@@ -132,9 +132,9 @@ class Conv2d : public Layer{
         tuple<int,int,int> input_dim;
         tuple<int,int,int> output_dim;
 
-        Conv2d(){}
+        Conv2D(){}
 
-        Conv2d(
+        Conv2D(
             string label,
             tuple<int,int,int> input_dim,
             int filter_size,
@@ -144,11 +144,11 @@ class Conv2d : public Layer{
             int dilation=1
         ){
             if(stride <= 0)
-                throw runtime_error("Stride cannot be 0 or negative for Conv2d layer: "+label);
+                throw invalid_argument("Stride cannot be 0 or negative for Conv2D layer: "+label);
             if(padding < 0)
-                throw runtime_error("Padding cannot be negative for Conv2d layer: "+label);
+                throw invalid_argument("Padding cannot be negative for Conv2D layer: "+label);
             if(get<0>(input_dim)<=0 || get<1>(input_dim)<=0 || get<2>(input_dim)<=0)
-                throw runtime_error("Input dimension cannot be less than 0 for Conv2d layer: "+label);
+                throw invalid_argument("Input dimension cannot be less than 0 for Conv2D layer: "+label);
 
             this->label = label;
             this->input_dim = input_dim;
@@ -169,7 +169,7 @@ class Conv2d : public Layer{
                     for(int k=0 ; k < filters[i][j].size() ; k++){
                         for(int l=0 ; l < filters[i][j][k].size() ; l++){
                             filters[i][j][k][l] = Value(
-                                "Conv2d: "+this->label+" param("+to_string(i)+','+to_string(j)+','+to_string(k)+','+to_string(l)+").",
+                                "Conv2D: "+this->label+" param("+to_string(i)+','+to_string(j)+','+to_string(k)+','+to_string(l)+").",
                                 generate_random_in_range(-0.1, 0.1)
                             );
                         }
@@ -252,9 +252,9 @@ class Conv2d : public Layer{
             return ans;
         }
 
-        Tensor forward(Tensor t_input){
+        Tensor forward(Tensor& t_input){
             if(!holds_alternative<Tensor3D>(t_input))
-                throw runtime_error("Invalid input Tensor to Conv2d layer: "+this->label+".");
+                throw runtime_error("Invalid input Tensor to Conv2D layer: "+this->label+".");
             
             const Tensor3D& input = std::get<Tensor3D>(t_input);
             if(input.size() != get<2>(input_dim))
@@ -274,9 +274,9 @@ class Conv2d : public Layer{
             return ans;
         }
         
-        Tensor back_prop(Tensor t_grads){
+        Tensor back_prop(Tensor& t_grads){
             if(!holds_alternative<Tensor3D>(t_grads))
-                throw runtime_error("Invalid gradient Tensor to Conv2d layer: "+this->label+".");
+                throw runtime_error("Invalid gradient Tensor to Conv2D layer: "+this->label+".");
             
             const Tensor3D& grads = std::get<Tensor3D>(t_grads);
             if(grads.size() != get<2>(output_dim))
@@ -332,7 +332,7 @@ class Flatten : public Layer{
             this->label = label;
         }
 
-        Tensor forward(Tensor t_input) {
+        Tensor forward(Tensor& t_input) {
             if(holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Flatten layer: "+this->label+".");
             
@@ -346,7 +346,7 @@ class Flatten : public Layer{
             }
             else if(holds_alternative<Tensor3D>(t_input)){
                 const Tensor3D& input = std::get<Tensor3D>(t_input);
-                this->input_shape = {input.size(), input[0].size(), input[0][0].size()};
+                this->input_shape = {input[0].size(), input[0][0].size(), input.size()};
                 for(const Tensor2D& channel: input){
                     for(const Tensor1D& row: channel){
                         output.insert(output.end(), row.begin(), row.end());
@@ -356,11 +356,11 @@ class Flatten : public Layer{
             return output;
         }
 
-        Tensor back_prop(Tensor t_grads) {
+        Tensor back_prop(Tensor& t_grads) {
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Flatten layer: "+this->label+".");
 
-            Tensor1D& grads = std::get<Tensor1D>(t_grads);
+            const Tensor1D& grads = std::get<Tensor1D>(t_grads);
             int x=get<0>(input_shape);
             int y=get<1>(input_shape);
             int z=get<2>(input_shape);
@@ -373,17 +373,124 @@ class Flatten : public Layer{
                 return ip_grads;
             }
             else{
-                Tensor3D ip_grads = Tensor3D(x, Tensor2D(y, Tensor1D(z)));
-                for(int i=0 ; i<x ; i++)
-                    for(int j=0 ; j<y ; j++)
-                        for(int k=0 ; k<z ; k++)
-                            ip_grads[i][j][k] = grads[i*z*y + j*z + k];
+                Tensor3D ip_grads = Tensor3D(z, Tensor2D(x, Tensor1D(y)));
+                for(int i=0 ; i<z ; i++)
+                    for(int j=0 ; j<x ; j++)
+                        for(int k=0 ; k<y ; k++)
+                            ip_grads[i][j][k] = grads[i*x*y + j*y + k];
                 return ip_grads;
             }
         }
 
         void update_weights(double lr = 0.1) {
             // Flatten has no weights, so this is correct.
+        }
+};
+
+class MaxPool2D : public Layer {
+    public:
+        // This will store the (x, y) coordinates of the max value for each output pixel
+        vector<vector<vector<pair<int, int>>>> max_indices;
+        
+        int stride;
+        int padding;
+        int filter_size;
+        int dilation;
+        tuple<int, int, int> input_dim;
+        tuple<int, int, int> output_dim;
+
+        MaxPool2D(string label, tuple<int, int, int> input_dim, int filter_size,
+                int stride = 1, int padding = 0, int dilation = 1) {
+            // ... (Your constructor is correct, no changes needed here) ...
+            this->label = label;
+            this->input_dim = input_dim;
+            int effective_filter_size = dilation * (filter_size - 1) + 1;
+            this->output_dim = {
+                ((get<0>(input_dim) + 2 * padding - effective_filter_size) / stride + 1),
+                ((get<1>(input_dim) + 2 * padding - effective_filter_size) / stride + 1),
+                get<2>(input_dim)
+            };
+            this->stride = stride;
+            this->filter_size = filter_size;
+            this->padding = padding;
+            this->dilation = dilation;
+        }
+
+        // FIX: Pass input by const reference to avoid expensive copy
+        Tensor forward(Tensor& t_input) {
+            if (!holds_alternative<Tensor3D>(t_input))
+                throw invalid_argument("Invalid input Tensor to MaxPool2D layer: " + this->label);
+
+            // FIX: Get a const reference, don't make a full copy for 'this->input'
+            const Tensor3D& input = std::get<Tensor3D>(t_input);
+
+            auto [out_h, out_w, channels] = this->output_dim;
+            Tensor3D output(channels, Tensor2D(out_h, Tensor1D(out_w)));
+            
+            // Initialize the mask to store indices
+            this->max_indices.assign(channels, vector<vector<pair<int, int>>>(out_h, vector<pair<int, int>>(out_w)));
+
+            for (int c = 0; c < channels; ++c) {
+                for (int h = 0; h < out_h; ++h) {
+                    for (int w = 0; w < out_w; ++w) {
+                        double max_val = -numeric_limits<double>::infinity();
+                        int max_x = -1, max_y = -1;
+
+                        for (int i = 0; i < filter_size; ++i) {
+                            for (int j = 0; j < filter_size; ++j) {
+                                int in_x = h * stride + i * dilation - padding;
+                                int in_y = w * stride + j * dilation - padding;
+
+                                if (in_x >= 0 && in_x < get<0>(input_dim) && in_y >= 0 && in_y < get<1>(input_dim)) {
+                                    if (input[c][in_x][in_y] > max_val) {
+                                        max_val = input[c][in_x][in_y];
+                                        max_x = in_x;
+                                        max_y = in_y;
+                                    }
+                                }
+                            }
+                        }
+                        output[c][h][w] = max_val;
+                        // FIX: Store the index of the max value
+                        this->max_indices[c][h][w] = {max_x, max_y};
+                    }
+                }
+            }
+            return output;
+        }
+
+        // FIX: Pass grads by const reference
+        Tensor back_prop(Tensor& t_grads) {
+            if (!holds_alternative<Tensor3D>(t_grads))
+                throw invalid_argument("Invalid grads Tensor to MaxPool2D layer: " + this->label);
+
+            const Tensor3D& grads = std::get<Tensor3D>(t_grads);
+            
+            auto [in_h, in_w, channels] = this->input_dim;
+            auto [out_h, out_w, _] = this->output_dim;
+
+            // Initialize input gradients to all zeros
+            Tensor3D input_grads(channels, Tensor2D(in_h, Tensor1D(in_w, 0.0)));
+
+            for (int c = 0; c < channels; ++c) {
+                for (int h = 0; h < out_h; ++h) {
+                    for (int w = 0; w < out_w; ++w) {
+                        // FIX: Directly look up the saved index
+                        int max_x = this->max_indices[c][h][w].first;
+                        int max_y = this->max_indices[c][h][w].second;
+
+                        if (max_x != -1) { // Check if the max was found in a valid region
+                            // FIX: Accumulate gradients, don't overwrite
+                            input_grads[c][max_x][max_y] += grads[c][h][w];
+                        }
+                    }
+                }
+            }
+            return input_grads;
+        }
+        
+        void update_weights(double learning_rate) override {
+            // MaxPool has no weights, so this is correct
         }
 };
 
@@ -397,9 +504,9 @@ class Softmax : public Layer{
             this->label = label;
         }
 
-        Tensor forward(const Tensor t_input){
+        Tensor forward(Tensor& t_input){
             if(!holds_alternative<Tensor1D>(t_input))
-                throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
+                throw invalid_argument("Invalid input Tensor to Softmax layer: "+this->label+".");
 
             this->input = std::get<Tensor1D>(t_input);
             double sum = 0.0;
@@ -420,7 +527,7 @@ class Softmax : public Layer{
             return op;
         }
 
-        Tensor back_prop(const Tensor t_grads){
+        Tensor back_prop(Tensor& t_grads){
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
             
@@ -470,7 +577,7 @@ public:
         this->label = label;
     }
 
-    Tensor forward(Tensor t_input) {
+    Tensor forward(Tensor& t_input) {
         this->input_cache = t_input; // Store original input
         if(holds_alternative<Tensor1D>(t_input)){
             Tensor1D& temp = std::get<Tensor1D>(t_input);
@@ -496,7 +603,7 @@ public:
         return t_input;
     }
 
-    Tensor back_prop(Tensor t_grads) {
+    Tensor back_prop(Tensor& t_grads) {
         if(holds_alternative<Tensor1D>(t_grads)){
             Tensor1D& temp = std::get<Tensor1D>(input_cache);
             Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);

@@ -12,6 +12,8 @@ using Tensor3D = std::vector<std::vector<std::vector<double>>>;
 using Tensor = variant<Tensor1D, Tensor2D, Tensor3D>;
 using Data = pair<Tensor,Tensor>;
 using Batch = vector<Data>;
+double inf = std::numeric_limits<double>::infinity();
+double negInf = -inf;
 
 template <typename T>
 std::enable_if_t<
