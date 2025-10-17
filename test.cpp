@@ -1,24 +1,30 @@
+#define NOMINMAX
+#define NODATA
+#include "indicators.hpp"
 #include "CNN.hpp"
+#include <utility>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <string>
-#include <utility>
 using namespace std;
-#define Dataset vector<pair<vector<double>,vector<double>>>
-#define Data pair<vector<double>,vector<double>>
+using Batch = vector<pair<vector<double>,vector<double>>>;
+using Data = pair<vector<double>,vector<double>>;
+
 
 // Reads a batch of MNIST samples from CSV
 // Returns vector of pairs: (input vector, one-hot label vector)
-Dataset load_mnist_batch(const string& filename, size_t batch_size, size_t start_line = 0) {
+Batch load_mnist_batch(const string& filename, size_t batch_size, size_t start_line = 0) {
     ifstream file(filename);
     if (!file.is_open()) {
         throw runtime_error("Could not open file " + filename);
     }
     // Skip header line
-    string header;
-    getline(file, header);
+    if(start_line == 0){
+        string header;
+        getline(file, header);
+    }
 
     vector<pair<vector<double>,vector<double>>> batch;
     batch.reserve(batch_size);
@@ -75,52 +81,31 @@ Dataset load_mnist_batch(const string& filename, size_t batch_size, size_t start
 //     {{0.92, 0.44, 0.36, 0.51, 0.26, 0.67, 0.15, 0.79, 0.33, 0.58}, {1, 0, 0}}
 // };
 
-int main(){
+void test_ann(){
     
     Model test_model = Model({
         new Dense("Layer1", 784, 256),
-        new ReLU("relu1",256),
+        new ReLU("relu1"),
         new Dense("Layer2", 256, 128),
-        new ReLU("relu2",128),
+        new ReLU("relu2"),
         new Dense("Layer3", 128, 10),
-        new Softmax("softmax1", 10)
+        new Softmax("softmax1")
     });
     
     int n_epochs = 5;
-    int n_iterations = 1;
-    int batch_size = 1;
-    int dataset_size = 10;
+    int n_iterations_per_batch = 1;
+    int batch_size = 10;
+    int dataset_size = 1000;
+    double learning_rate = 0.01;
+    // Calculate the total number of batches for 1 epoch
+    int total_batches = (dataset_size + batch_size - 1) / batch_size;
     string file_path = "./archive/mnist_train.csv";
 
-    for(int epoch=0 ; epoch<n_epochs ; epoch++){
-        cout<<"Epoch: "<<epoch<<endl;
-            int start_line=0;
-            vector<double> loses;
-            while(start_line < dataset_size){
-                Dataset batch;
-                if(start_line + batch_size > dataset_size){
-                    batch = load_mnist_batch(file_path, dataset_size-start_line, start_line);
-                }
-                else{
-                    batch = load_mnist_batch(file_path, batch_size, start_line);
-                }
-                vector<double> l = test_model.train(
-                    batch, // batch
-                    100,     // iterations
-                    0.001       // learning rate
-                );
-                loses.insert(loses.end(),l.begin(),l.end());
-                cout<<"loss: "<<l.back()<<"\r";
-                start_line += batch_size;
-            }
-            cout<<"Epoch: "<<epoch<<" loss: "<<loses.back()<<endl;
-    }
-
-    cout<<"=====Testing with random input=====\n";
+    cout<<"\n=====Testing with random input before training=====\n";
     for(int i=0 ; i<5 ; i++){
         int x = rand()%dataset_size;
         Data data = load_mnist_batch(file_path, 1, x)[0];
-        vector<double> op = test_model.run(data.first);
+        Tensor1D op = std::get<Tensor1D>(test_model.run(data.first));
         cout<<setw(20)<<"Predicted output: [ ";
         for(double d: op)
             cout<<d<<", ";
@@ -130,4 +115,208 @@ int main(){
             cout<<d<<", ";
         cout<<"\b\b ]\n";
     }
+
+    indicators::show_console_cursor(false);
+    indicators::ProgressBar p{
+        indicators::option::BarWidth{20},
+        indicators::option::Start{"["},
+        indicators::option::Fill{"="},
+        indicators::option::Lead{">"},
+        indicators::option::End{"]"},
+        indicators::option::ForegroundColor{indicators::Color::yellow},
+        indicators::option::PrefixText{"Epoch: 0"},
+        indicators::option::PostfixText{"Batch: 0 Loss: inf"},
+        indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
+        indicators::option::MaxProgress{static_cast<size_t>(total_batches * n_epochs)}
+    };
+    for(int epoch=0 ; epoch<n_epochs ; epoch++){
+        p.set_option(indicators::option::PrefixText{"Epoch: "+to_string(epoch)});
+        int start_line=1, i=1;
+        vector<double> loses;
+        while(start_line < dataset_size){
+            Batch batch;
+            if(start_line + batch_size > dataset_size){
+                batch = load_mnist_batch(file_path, dataset_size-start_line, start_line);
+            }
+            else{
+                batch = load_mnist_batch(file_path, batch_size, start_line);
+            }
+            vector<double> l = test_model.train(
+                batch,                          // batch
+                n_iterations_per_batch,         // iterations
+                learning_rate                   // learning rate
+            );
+            loses.insert(loses.end(),l.begin(),l.end());
+            // cout<<"loss: "<<l.back()<<"\r";
+            p.set_option(indicators::option::PostfixText{"Batch: "+to_string(i)+" Batch Loss: "+to_string(l.back())});
+            p.tick();
+            i++;
+            start_line += batch_size;
+        }
+        cout<<endl;
+    }
+    indicators::show_console_cursor(true);
+    std::cout << "\033[0m" << std::flush;  // reset colors to default
+
+
+    cout<<"\n=====Testing with random input after training=====\n";
+    for(int i=0 ; i<5 ; i++){
+        int x = rand()%dataset_size;
+        Data data = load_mnist_batch(file_path, 1, x)[0];
+        Tensor1D op = std::get<Tensor1D>(test_model.run(data.first));
+        cout<<setw(20)<<"Predicted output: [ ";
+        for(double d: op)
+            cout<<d<<", ";
+        cout<<"\b\b ]\n";
+        cout<<setw(20)<<"Actual output: [ ";
+        for(double d: data.second)
+            cout<<d<<", ";
+        cout<<"\b\b ]\n";
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void test_op(){
+
+    vector<vector<double>> a = {
+        {1,2,3},
+        {4,5,6}
+    };
+    vector<vector<double>> b = {
+        {1,2,3},
+        {4,5,6}
+    };
+    cout<<a<<'\n'<<b<<'\n'<<(a+b)<<endl;     
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void test_convolution(){
+    
+    // Define input dimensions: (height, width, channels)
+    tuple<int,int,int> input_dim = {4, 4, 1};
+
+    // Create Conv2d layer
+    Conv2d conv("TestConv", input_dim, 3, 1, 1, 0, 1); 
+    // filter_size, no_of_filters, stride, padding, dilation
+    cout<<get<0>(conv.output_dim)<<','<<get<1>(conv.output_dim)<<','<<get<2>(conv.output_dim)<<'\n';
+
+    // Create simple input (1 channel of 4x4)
+    vector<vector<vector<double>>> input(1, vector<vector<double>>(get<0>(input_dim), vector<double>(get<1>(input_dim))));
+
+    // Fill with simple increasing pattern
+    int val = 1;
+    for (int i = 0; i < input[0].size(); i++) {
+        for (int j = 0; j < input[0][i].size(); j++) {
+            input[0][i][j] = val++;
+        }
+    }
+
+    cout << "Input:\n";
+    cout<<input[0];
+
+    // Set filters to 1
+    for (int oc = 0; oc < conv.filters.size(); oc++) {
+        for (int ic = 0; ic < conv.filters[oc].size(); ic++){
+            for(int x = 0; x < conv.filters[oc][ic].size(); x++){
+                for(int y = 0; y < conv.filters[oc][ic][x].size(); y++){
+                    conv.filters[oc][ic][x][y].val = 1;
+                }
+            }
+        }
+    }
+
+    // Forward pass
+    auto output = std::get<Tensor3D>(conv.forward(input));
+
+    cout << "\nOutput dimensions: "
+         << get<0>(conv.output_dim) << "x" << get<1>(conv.output_dim)
+         << "x" << get<2>(conv.output_dim) << endl;
+
+    cout << "\nOutput:\n";
+    for (int oc = 0; oc < output.size(); oc++) {
+        cout << "Channel " << oc << ":\n";
+        cout << output[oc] << endl;
+    }
+    
+    cout << "\nFilter grads before calc:\n";
+    for (int oc = 0; oc < conv.filters.size(); oc++) {
+        cout << "Output Channel " << oc << ":\n";
+        for (int ic = 0; ic < conv.filters[oc].size(); ic++){
+            cout << "\tInput Channel " << ic << ":\n";
+            cout << conv.filters[oc][ic] << endl;
+        }
+    }
+    
+    Tensor3D grads = {{
+        {1,1},
+        {1,1}
+    }};
+    vector<vector<vector<double>>> in_grads = std::get<Tensor3D>(conv.back_prop(grads));
+
+    cout << "\nFilter grads after calc:\n";
+    for (int oc = 0; oc < conv.filters.size(); oc++) {
+        cout << "Output Channel " << oc << ":\n";
+        for (int ic = 0; ic < conv.filters[oc].size(); ic++){
+            cout << "\tInput Channel " << ic << ":\n";
+            cout << conv.filters[oc][ic] << endl;
+        }
+    }
+    
+    cout << "\nInput grads after calc:\n";
+    for (int ic = 0; ic < in_grads.size(); ic++) {
+        cout << "\tInput Channel " << ic << ":\n";
+        cout << in_grads[ic] << endl;
+    }
+}
+
+void testing_flatten(){
+    Tensor3D ip = Tensor3D(3, Tensor2D(2, Tensor1D(2)));
+    // Fill with simple increasing pattern
+    int val = 1;
+    for (int i = 0; i < ip.size(); i++) {
+        for (int j = 0; j < ip[i].size(); j++) {
+            for(int k=0 ; k < ip[i][j].size() ; k++)
+                ip[i][j][k] = val++;
+        }
+    }
+
+    cout << "\nInput:\n";
+    for (int ic = 0; ic < ip.size(); ic++) {
+        cout << "\tInput Channel " << ic << ":\n";
+        cout << ip[ic] << endl;
+    }
+
+    Flatten fl("Flatten layer test");
+    Tensor1D op = std::get<Tensor1D>(fl.forward(ip));
+
+    cout<<"\nOutput:\n"<<op<<endl;
+
+    cout<<"\nGrads shape\n";
+    cout<<'('<<get<0>(fl.input_shape)<<", "<<get<1>(fl.input_shape)<<", "<<get<2>(fl.input_shape)<<" )\n";
+
+    Tensor3D grads = std::get<Tensor3D>(fl.back_prop(op));
+    cout<<"\nReverse:\n";
+    for (int ic = 0; ic < grads.size(); ic++) {
+        cout << "\tOutput Channel " << ic << ":\n";
+        cout << grads[ic] << endl;
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int main(){
+    // testing ANN
+    // test_ann();
+
+    // testing Operations
+    // test_op();
+
+    // testing convolutions
+    // test_convolution();
+
+    // testing flatten
+    // testing_flatten();
 }

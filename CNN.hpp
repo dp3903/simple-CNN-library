@@ -4,11 +4,28 @@
 #include <iomanip>
 #include <iostream>
 
+template <typename T>
+std::enable_if_t<
+    (std::is_same_v<T, Tensor1D> || 
+    std::is_same_v<T, Tensor2D> || 
+    std::is_same_v<T, Tensor3D>),
+    int
+>
+Tensor_size(T tensor){
+    if constexpr (std::is_same_v<T, Tensor1D>)
+        return tensor.size();
+    else if constexpr (std::is_same_v<T, Tensor2D>)
+        return (tensor.size() * tensor[0].size());
+    else
+        return (tensor.size() * tensor[0].size() * tensor[0][0].size());
+}
+
 class Model{
     public:
         string name;
         vector<Layer*> layers;
         LossFunction* loss;
+        bool trainable = true;
         
         Model(){}
 
@@ -24,7 +41,7 @@ class Model{
             this->loss = loss;
         }
 
-        vector<double> run(vector<double> ip){
+        variant<Tensor1D,Tensor2D,Tensor3D> run(variant<Tensor1D,Tensor2D,Tensor3D> ip){
             for(Layer* l: layers){
                 try{
                     ip = l->forward(ip);
@@ -36,15 +53,45 @@ class Model{
             }
             return ip;
         }
+        
+        variant<Tensor1D,Tensor2D,Tensor3D> back(variant<Tensor1D,Tensor2D,Tensor3D> grads){
+            for(int u=layers.size()-1 ; u>=0 ; u--){
+                try{
+                    grads = layers[u]->back_prop(grads);
+                }
+                catch (const exception& e) {
+                    std::cerr << "Error: " << e.what() << std::endl;
+                    exit(1);
+                }
+            }
+            return grads;
+        }
 
-        vector<double> train(vector<pair<vector<double>,vector<double>>> dataset, int iterations=1, double learning_rate=0.1){
+        template <typename T, typename V>
+        std::enable_if_t<
+            ((
+            std::is_same_v<T, Tensor1D> || 
+            std::is_same_v<T, Tensor2D> || 
+            std::is_same_v<T, Tensor3D>)
+            &&
+            (std::is_same_v<V, Tensor1D> || 
+            std::is_same_v<V, Tensor2D> || 
+            std::is_same_v<V, Tensor3D>)),
+            vector<double> 
+        >
+        train(vector<pair<T,V>> batch, int iterations=1, double learning_rate=0.1){
             vector<double> loses = vector<double>(iterations);
             // cout<<"\n===============Batch Training Starting===============\n";
             for(int i=0 ; i < iterations ; i++){
                 double iteration_loss = 0.0;
-                for(pair<vector<double>,vector<double>> sample : dataset){
-                    vector<double> op = this->run(sample.first);
+                for(pair<T,V> sample : batch){
+                    V op = std::get<V>(this->run(sample.first));
+                
+                    iteration_loss += this->loss->calculate(op,sample.second);
+                    V op_grads = (op - sample.second) / Tensor_size(op);
+                    this->back(op_grads);
 
+                    
                     // cout<<setw(20)<<"Predicted output: [ ";
                     // for(double d: op)
                     //     cout<<d<<", ";
@@ -53,25 +100,14 @@ class Model{
                     // for(double d: sample.second)
                     //     cout<<d<<", ";
                     // cout<<"\b\b ]\n";
-                
-                    try{
-                        iteration_loss += this->loss->calculate(op,sample.second);
-                        vector<double> op_grads = vector<double>(op.size());
-                        for(int u=0 ; u<op.size() ; u++){
-                            op_grads[u] = (op[u] - sample.second[u]) / sqrt(op.size());
-                        }
-                        for(int u=layers.size()-1 ; u>=0 ; u--)
-                            op_grads = layers[u]->back_prop(op_grads);
-                    }
-                    catch (const exception& e) {
-                        std::cerr << "Error: " << e.what() << std::endl;
-                        exit(1);
-                    }
                 }
-                for(Layer* l: layers)
-                    l->update_weights(learning_rate);
 
-                loses[i] = iteration_loss/dataset.size();
+                if(this->trainable){
+                    for(Layer* l: layers)
+                       l->update_weights(learning_rate);
+                }
+
+                loses[i] = iteration_loss/batch.size();
                 // cout<<"Iteration: "<<i<<" Loss: "<<loses[i]<<'\r';
             }
             // cout<<"\n===============Batch Training Complete===============\n";
