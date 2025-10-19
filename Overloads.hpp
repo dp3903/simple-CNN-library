@@ -325,3 +325,76 @@ size_t size(const Tensor& t) {
         return op(op, tensor);
     }, t);
 }
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<vector<double>>
+>
+convolve(
+    vector<vector<double>> mat, 
+    vector<vector<T>> filter, 
+    int padding = 0, 
+    int stride = 1, 
+    int dilation = 1
+){
+    // 1. Get dimensions
+    int input_H = mat.size();
+    int input_W = mat[0].size();
+    int filter_H = filter.size();
+    int filter_W = filter[0].size();
+
+    // 2. Calculate output dimensions (standard formula)
+    // H_out = floor((H_in - H_filter + 2*P) / S) + 1
+    // Note: Dilation is already accounted for in the H_filter term (H_filter_effective = D * (H_filter - 1) + 1)
+    // For non-unit dilation, the formula should use the effective filter size.
+    int effective_filter_H = dilation * (filter_H - 1) + 1;
+    int effective_filter_W = dilation * (filter_W - 1) + 1;
+
+    int out_H = (input_H - effective_filter_H + 2 * padding) / stride + 1;
+    int out_W = (input_W - effective_filter_W + 2 * padding) / stride + 1;
+
+    // Check for invalid dimension, though integer division in C++ often handles this.
+    if (out_H <= 0 || out_W <= 0) {
+        return {}; // Return empty matrix if output dimensions are invalid
+    }
+
+    // 3. Initialize the output matrix (Height, then Width)
+    vector<vector<double>> ans(out_H, vector<double>(out_W));
+
+    // 4. Perform Convolution
+    // out_y = Row (Height), out_x = Column (Width)
+    for (int out_y = 0; out_y < out_H; out_y++) {
+        for (int out_x = 0; out_x < out_W; out_x++) {
+            double sum = 0;
+            
+            // Loop over filter rows (i) and columns (j)
+            for (int i = 0; i < filter_H; i++) {
+                for (int j = 0; j < filter_W; j++) {
+                    
+                    // Calculate corresponding input coordinates (y, x)
+                    // in_coord = out_coord * Stride + Dilation * Filter_coord - Padding
+                    int in_y = out_y * stride + dilation * i - padding;
+                    int in_x = out_x * stride + dilation * j - padding;
+                    
+                    // Boundary Check
+                    if (in_y >= 0 && in_y < input_H && 
+                        in_x >= 0 && in_x < input_W) 
+                    {
+                        // Standard Convolution: Filter element * Input element
+                        // Note the correct [row/y][column/x] indexing for mat
+                        if constexpr(std::is_same_v<T, Value>)
+                            sum += filter[i][j].val * mat[in_y][in_x];                                    
+                        else
+                            sum += filter[i][j] * mat[in_y][in_x];
+                    }
+                    // If out of bounds, padding assumes a zero, so we do nothing.
+                }
+            }
+            ans[out_y][out_x] = sum;
+        }
+    }
+
+    return ans;
+}

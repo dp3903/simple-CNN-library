@@ -45,8 +45,32 @@ class Value{
         void update(){
             val += grad;
         }
+
+        string as_string() const{
+            return ("Value(val: " + to_string(this->val) + ", grad: " + to_string(this->grad) + ")");
+        }
 };
 
 ostream& operator<<(ostream& os, const Value& obj) {
-    return (os << "Value(val: " << obj.val << ", grad: " << obj.grad << ")");
+    return (os << obj.as_string());
+}
+
+string operator*(string s, int x){
+    if(x < 0)
+        throw invalid_argument("string cannot be multiplied by negative integers.");
+        
+    string out = "";
+    while(x--)
+        out += s;
+    return out;
+}
+
+string operator*(int x, string s){
+    if(x < 0)
+        throw invalid_argument("string cannot be multiplied by negative integers.");
+        
+    string out = "";
+    while(x--)
+        out += s;
+    return out;
 }

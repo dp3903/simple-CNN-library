@@ -66,9 +66,9 @@ Batch load_mnist_batch(const string& filename, size_t batch_size, size_t start_l
 
 Batch reshape_mnist_batch(Batch batch){
     Batch output;
-    int height = 28, width = 28, channels = 1;
+    size_t height = 28, width = 28, channels = 1;
     Flatten fl;
-    fl.input_shape = {28,28,1}; // we use reverse flatten i.e. backprop of flatten to unflatten the input.
+    fl.input_shape = {channels, height, width}; // we use reverse flatten i.e. backprop of flatten to unflatten the input.
     for(Data d: batch){
         pair<Tensor,Tensor> temp;
         temp.second = d.second;
@@ -143,9 +143,9 @@ void test_ann(){
                 batch = load_mnist_batch(file_path, batch_size, start_line);
             }
             vector<double> l = test_model.train(
-                batch,                          // batch
-                n_iterations_per_batch,         // iterations
-                learning_rate                   // learning rate
+                /*Batch*/                   batch,
+                /*iterations per batch*/    n_iterations_per_batch,
+                /*learning rate*/           learning_rate
             );
             loses.insert(loses.end(),l.begin(),l.end());
             // cout<<"loss: "<<l.back()<<"\r";
@@ -202,7 +202,7 @@ void test_convolution(){
     // Create Conv2D layer
     Conv2D conv("TestConv", input_dim, 3, 1, 1, 0, 1); 
     // filter_size, no_of_filters, stride, padding, dilation
-    cout<<get<0>(conv.output_dim)<<','<<get<1>(conv.output_dim)<<','<<get<2>(conv.output_dim)<<'\n';
+    cout<<(conv.output_shape.width)<<','<<(conv.output_shape.height)<<','<<(conv.output_shape.channels)<<'\n';
 
     // Create simple input (1 channel of 4x4)
     Tensor3D input = Tensor3D(1, Tensor2D(get<0>(input_dim), Tensor1D(get<1>(input_dim))));
@@ -232,10 +232,6 @@ void test_convolution(){
     // Forward pass
     Tensor ip = input;
     auto output = std::get<Tensor3D>(conv.forward(ip));
-
-    cout << "\nOutput dimensions: "
-         << get<0>(conv.output_dim) << "x" << get<1>(conv.output_dim)
-         << "x" << get<2>(conv.output_dim) << endl;
 
     cout << "\nOutput:\n";
     for (int oc = 0; oc < output.size(); oc++) {
@@ -300,7 +296,7 @@ void testing_flatten(){
     cout<<"\nOutput:\n"<<output<<endl;
 
     cout<<"\nGrads shape\n";
-    cout<<'('<<get<0>(fl.input_shape)<<", "<<get<1>(fl.input_shape)<<", "<<get<2>(fl.input_shape)<<" )\n";
+    cout<<'('<<(fl.input_shape.width)<<", "<<(fl.input_shape.height)<<", "<<(fl.input_shape.channels)<<" )\n";
 
     Tensor op = output;
     Tensor3D grads = std::get<Tensor3D>(fl.back_prop(op));
@@ -326,7 +322,7 @@ void testing_CNN(){
         new Dense("Dense Layer2", 128, 10),
         new Softmax("softmax1")
     });
-
+    cout<<"Input shape: "<<test_model.layers[0]->input_shape<<endl;
     int n_epochs = 5;
     int n_iterations_per_batch = 1;
     int batch_size = 10;
@@ -380,9 +376,9 @@ void testing_CNN(){
             }
             batch = reshape_mnist_batch(batch);
             vector<double> l = test_model.train(
-                batch,                          // batch
-                n_iterations_per_batch,         // iterations
-                learning_rate                   // learning rate
+                /*Batch*/                   batch,
+                /*iterations per batch*/    n_iterations_per_batch,
+                /*learning rate*/           learning_rate
             );
             loses.insert(loses.end(),l.begin(),l.end());
             // cout<<"loss: "<<l.back()<<"\r";
@@ -415,6 +411,49 @@ void testing_CNN(){
     }
 }
 
+void testing_auto_initializer(){
+    Model test_model = Model({
+        new Conv2D("Conv Layer1", 3, 4),
+        new MaxPool2D("Pool Layer1", 2, 2),
+        new Conv2D("Conv Layer2", 3, 8),
+        new MaxPool2D("Pool Layer2", 2, 2),
+        new Flatten("Flatten layer"),
+        new Dense("Dense Layer1", 128),
+        new ReLU("ReLU Layer1"),
+        new Dense("Dense Layer2", 10),
+        new Softmax("softmax1")
+    });
+
+    GlobalInitializerStrategies.compile(test_model.layers, {1, 28, 28});
+
+    test_model.set_traianable(false);
+
+    test_model.summary();
+
+    int start_line = 1;
+    int batch_size = 10;
+    int dataset_size = 1000;
+    double learning_rate = 0.1;
+    // Calculate the total number of batches for 1 epoch
+    int total_batches = (dataset_size + batch_size - 1) / batch_size;
+    string file_path = "./archive/mnist_train.csv";
+    Batch batch;
+    if(start_line + batch_size > dataset_size){
+        batch = load_mnist_batch(file_path, dataset_size-start_line, start_line);
+    }
+    else{
+        batch = load_mnist_batch(file_path, batch_size, start_line);
+    }
+    batch = reshape_mnist_batch(batch);
+
+    // testing forward pass
+    vector<double> l = test_model.train(
+        /*Batch*/                   batch,
+        /*iterations per batch*/    1,
+        /*learning rate*/           learning_rate
+    );
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main(){
@@ -431,5 +470,8 @@ int main(){
     // testing_flatten();
 
     // tesing CNN
-    testing_CNN();
+    // testing_CNN();
+
+    // testing auto initializer
+    testing_auto_initializer();
 }

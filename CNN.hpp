@@ -10,7 +10,6 @@ class Model{
         string name;
         vector<Layer*> layers;
         LossFunction* loss;
-        bool trainable = true;
         
         Model(){}
 
@@ -75,15 +74,63 @@ class Model{
                     // cout<<"\b\b ]\n";
                 }
 
-                if(this->trainable){
-                    for(Layer* l: layers)
-                       l->update_weights(learning_rate);
-                }
-
+                for(Layer* l: layers)
+                    l->update_weights(learning_rate);
+                
                 loses[i] = iteration_loss/batch.size();
                 // cout<<"Iteration: "<<i<<" Loss: "<<loses[i]<<'\r';
             }
             // cout<<"\n===============Batch Training Complete===============\n";
             return loses;
         }
+
+        void summary(){
+            int total_params = 0, trainable_params = 0;
+            cout<<endl;
+            cout<<"\t-"<<(string("-")*131)<<endl;
+            cout<<"\t|"<<setw(25)<<"Layer"<<" "<<setw(25)<<"input_shape"<<" "<<setw(25)<<"output_shape"<<" "<<setw(25)<<"Parameters"<<" "<<setw(25)<<"Trainable"<<" |"<<endl;
+            cout<<"\t-"<<(string("-")*131)<<endl;
+            for(Layer* l: this->layers){
+                int params = l->parameter_count();
+                cout<<"\t|"<<setw(25)<<l->label<<" "<<setw(25)<<l->input_shape<<" "<<setw(25)<<l->output_shape<<" "<<setw(25)<<(params>=0?to_string(params):"uninitialized")<<" "<<setw(25)<<(l->trainable?"true":"false")<<" |"<<endl;
+                if(total_params >= 0 && params >= 0){
+                    total_params += params;
+                    if(l->trainable)
+                        trainable_params += params;
+                }
+                else{
+                    total_params = -1;
+                    trainable_params = -1;
+                }
+            }
+            cout<<"\t-"<<(string("-")*131)<<endl;
+            cout<<"\t|"<<setw(25)<<"Total layers"<<" "<<setw(25)<<(this->layers.size())<<" |"<<endl;
+            cout<<"\t|"<<setw(25)<<"Total parameters"<<" "<<setw(25)<<(total_params>=0?to_string(total_params):"uninitialized")<<" |"<<endl;
+            cout<<"\t|"<<setw(25)<<"Trainable parameters"<<" "<<setw(25)<<(trainable_params>=0?to_string(trainable_params):"uninitialized")<<" |"<<endl;
+            cout<<"\t|"<<setw(25)<<"Non-Trainable parameters"<<" "<<setw(25)<<(trainable_params>=0?to_string(total_params - trainable_params):"uninitialized")<<" |"<<endl;
+            cout<<"\t-"<<(string("-")*53)<<endl;
+            cout<<endl;
+        }
+
+        void set_traianable(bool s){
+            for(Layer* l: layers)
+                l->trainable = false;
+        }
+
+        bool get_traianable(){
+            for(Layer* l: layers)
+                if(l->trainable)
+                    return true;
+            return false;
+        }
 };
+
+
+vector<Layer*> AutoInitializer(vector<Layer*> layers){
+    for(int i=0 ; i<layers.size() ; i++){
+        // const std::type_info& info = typeid(*layers[i]);
+        // cout<<"Layer: "<<i<<" name: "<<info.name()<<endl;
+        
+    }
+    return {};
+}
