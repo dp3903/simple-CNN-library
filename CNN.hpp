@@ -3,7 +3,9 @@
 #include <memory>
 #include <iomanip>
 #include <iostream>
-
+#include <fstream>
+#include "cereal/archives/binary.hpp"
+#include "cereal/types/memory.hpp"
 
 class Model{
     public:
@@ -139,4 +141,27 @@ class Model{
                     return true;
             return false;
         }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            archive(
+                CEREAL_NVP(name),      // Saves the label
+                CEREAL_NVP(layers)
+            );
+        }
 };
+
+
+// --- SAVING ---
+void save_model(const Model& model, const std::string& path) {
+    std::ofstream os(path, std::ios::binary);
+    cereal::BinaryOutputArchive archive(os);
+    archive(model); // That's it! Cereal saves the whole polymorphic vector.
+}
+
+// --- LOADING ---
+void load_model(Model& model, const std::string& path) {
+    std::ifstream is(path, std::ios::binary);
+    cereal::BinaryInputArchive archive(is);
+    archive(model); // Cereal reconstructs the entire model.
+}

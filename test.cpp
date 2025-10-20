@@ -454,6 +454,43 @@ void testing_auto_initializer(){
     );
 }
 
+
+void testing_model_saving(){
+    Model test_model = Model(
+        "test_model_1",
+        {
+            new Conv2D("Conv Layer1", 3, 4),
+            new MaxPool2D("Pool Layer1", 2, 2),
+            new Conv2D("Conv Layer2", 3, 8),
+            new MaxPool2D("Pool Layer2", 2, 2),
+            new Flatten("Flatten layer"),
+            new Dense("Dense Layer1", 128),
+            new ReLU("ReLU Layer1"),
+            new Dense("Dense Layer2", 10),
+            new Softmax("softmax1")
+        }
+    );
+    GlobalInitializerStrategies.compile(test_model.layers, {1, 28, 28});
+
+    string model_path = "./test_model.bin";
+
+    save_model(test_model, model_path);
+    cout<<"Model saved\n";
+
+    Model new_model;
+    load_model(new_model, model_path);
+    new_model.summary();
+
+    cout<<((Conv2D*)(new_model.layers[0].get()))->filters[0][0][0][0]<<endl;
+    cout<<((Conv2D*)(test_model.layers[0].get()))->filters[0][0][0][0]<<endl;
+    cout<<((Conv2D*)(new_model.layers[2].get()))->filters[0][0][0][0]<<endl;
+    cout<<((Conv2D*)(test_model.layers[2].get()))->filters[0][0][0][0]<<endl;
+    cout<<((Dense*)(new_model.layers[5].get()))->weights[0][0]<<endl;
+    cout<<((Dense*)(test_model.layers[5].get()))->weights[0][0]<<endl;
+    cout<<((Dense*)(new_model.layers[7].get()))->weights[0][0]<<endl;
+    cout<<((Dense*)(test_model.layers[7].get()))->weights[0][0]<<endl;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main(){
@@ -470,8 +507,11 @@ int main(){
     // testing_flatten();
 
     // tesing CNN
-    // testing_CNN();
+    testing_CNN();
 
     // testing auto initializer
-    testing_auto_initializer();
+    // testing_auto_initializer();
+    
+    //testing model save and load 
+    // testing_model_saving();
 }

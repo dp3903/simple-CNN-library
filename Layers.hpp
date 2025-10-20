@@ -22,6 +22,13 @@ struct Shape {
     size_t total_elements() const { return max(1,(int)channels) * max(1,(int)height) * width; }
 
     string as_string() const { return ("Shape(" + to_string(channels) + ", " + to_string(height) + ", " + to_string(width) + ")"); }
+
+    template <class Archive>
+    void serialize(Archive& archive) {
+        archive(CEREAL_NVP(channels));
+        archive(CEREAL_NVP(height));
+        archive(CEREAL_NVP(width));
+    }
 };
 
 ostream& operator<<(ostream& os, const Shape& s){
@@ -35,7 +42,8 @@ class Layer{
         Shape input_shape;
         Shape output_shape;
 
-        Layer(){}
+        Layer() = default;
+
         Layer(string name){
             this->label = name;
         }
@@ -47,11 +55,21 @@ class Layer{
         virtual Tensor back_prop(Tensor& grads){
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
-
         
         virtual void update_weights(double learning_rate = 0.1) = 0;
         virtual void compute_output_shape() = 0;
         virtual int parameter_count() = 0;
+
+        // You need a serialize function in the base class
+        template <class Archive>
+        void serialize(Archive& archive) {
+            archive(
+                CEREAL_NVP(label),   
+                CEREAL_NVP(input_shape),
+                CEREAL_NVP(output_shape),
+                CEREAL_NVP(trainable)
+            ); // Example: serialize base members
+        }
 };
 
 class Dense : public Layer{
@@ -59,6 +77,8 @@ class Dense : public Layer{
         vector<vector<Value>> weights;
         vector<Value> biases;
         Tensor1D input;
+
+        Dense() = default;
 
         Dense(string label, size_t output_size) : Layer(label){
             this->weights = vector<vector<Value>>(output_size);
@@ -163,6 +183,16 @@ class Dense : public Layer{
                 }
             }
         }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+            archive(
+                CEREAL_NVP(weights),    // Automatically handles the vector of vectors
+                CEREAL_NVP(biases)      // Automatically handles the vector
+            );
+        }
 };
 
 class Conv2D : public Layer{
@@ -175,6 +205,7 @@ class Conv2D : public Layer{
         int filter_size;
         int dilation;
 
+        Conv2D() = default;
 
         Conv2D(
             string label,
@@ -324,6 +355,16 @@ class Conv2D : public Layer{
                 }
             }
         }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+            archive(
+                CEREAL_NVP(filters),    // Automatically handles the vector of vectors
+                CEREAL_NVP(biases)      // Automatically handles the vector
+            );
+        }
 };
 
 class Flatten : public Layer{
@@ -402,6 +443,12 @@ class Flatten : public Layer{
         void update_weights(double lr = 0.1) {
             // Flatten has no weights, so this is correct.
         }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
 };
 
 class MaxPool2D : public Layer {
@@ -413,6 +460,8 @@ class MaxPool2D : public Layer {
         int padding;
         int filter_size;
         int dilation;
+
+        MaxPool2D() = default;
 
         MaxPool2D(
             string label,
@@ -533,6 +582,12 @@ class MaxPool2D : public Layer {
         void update_weights(double learning_rate) override {
             // MaxPool has no weights, so this is correct
         }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
 };
 
 class Softmax : public Layer{
@@ -610,84 +665,96 @@ class Softmax : public Layer{
         }
 
         void update_weights(double lr = 0.1){}
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
 };
 
 class ReLU : public Layer {
-public:
+    public:
 
-    // The cache for the input from the forward pass
-    Tensor input_cache;
+        // The cache for the input from the forward pass
+        Tensor input_cache;
 
-    ReLU() {}
-    ReLU(std::string label) {
-        this->label = label;
-    }
-
-    void compute_output_shape(){
-        output_shape = input_shape;
-    }
-
-    int parameter_count(){
-        return 0;
-    }
-
-    Tensor forward(Tensor& t_input) {
-        this->input_cache = t_input; // Store original input
-        if(holds_alternative<Tensor1D>(t_input)){
-            Tensor1D& temp = std::get<Tensor1D>(t_input);
-            for(auto& val: temp)
-                if(val < 0)
-                    val = 0;
+        ReLU() {}
+        ReLU(std::string label) {
+            this->label = label;
         }
-        else if(holds_alternative<Tensor2D>(t_input)){
-            Tensor2D& temp = std::get<Tensor2D>(t_input);
-            for(auto& row: temp)
-                for(auto& val: row)
+
+        void compute_output_shape(){
+            output_shape = input_shape;
+        }
+
+        int parameter_count(){
+            return 0;
+        }
+
+        Tensor forward(Tensor& t_input) {
+            this->input_cache = t_input; // Store original input
+            if(holds_alternative<Tensor1D>(t_input)){
+                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                for(auto& val: temp)
                     if(val < 0)
                         val = 0;
-        }
-        else{
-            Tensor3D& temp = std::get<Tensor3D>(t_input);
-            for(auto& channel: temp)
-                for(auto& row: channel)
+            }
+            else if(holds_alternative<Tensor2D>(t_input)){
+                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                for(auto& row: temp)
                     for(auto& val: row)
                         if(val < 0)
                             val = 0;
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(t_input);
+                for(auto& channel: temp)
+                    for(auto& row: channel)
+                        for(auto& val: row)
+                            if(val < 0)
+                                val = 0;
+            }
+            return t_input;
         }
-        return t_input;
-    }
 
-    Tensor back_prop(Tensor& t_grads) {
-        if(holds_alternative<Tensor1D>(t_grads)){
-            Tensor1D& temp = std::get<Tensor1D>(input_cache);
-            Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
-            for(int i=0 ; i < temp.size() ; i++)
-                if(temp[i] <= 0)
-                    temp_grads[i] = 0;
+        Tensor back_prop(Tensor& t_grads) {
+            if(holds_alternative<Tensor1D>(t_grads)){
+                Tensor1D& temp = std::get<Tensor1D>(input_cache);
+                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++)
+                    if(temp[i] <= 0)
+                        temp_grads[i] = 0;
+            }
+            else if(holds_alternative<Tensor2D>(t_grads)){
+                Tensor2D& temp = std::get<Tensor2D>(input_cache);
+                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++)
+                    for(int j=0 ; j < temp[i].size() ; j++)
+                        if(temp[i][j] <= 0)
+                            temp_grads[i][j] = 0;
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(input_cache);
+                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++)
+                    for(int j=0 ; j < temp[i].size() ; j++)
+                        for(int k=0 ; k < temp[i][j].size() ; k++)
+                            if(temp[i][j][k] <= 0)
+                                temp_grads[i][j][k] = 0;
+            }
+            return t_grads;
         }
-        else if(holds_alternative<Tensor2D>(t_grads)){
-            Tensor2D& temp = std::get<Tensor2D>(input_cache);
-            Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
-            for(int i=0 ; i < temp.size() ; i++)
-                for(int j=0 ; j < temp[i].size() ; j++)
-                    if(temp[i][j] <= 0)
-                        temp_grads[i][j] = 0;
-        }
-        else{
-            Tensor3D& temp = std::get<Tensor3D>(input_cache);
-            Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
-            for(int i=0 ; i < temp.size() ; i++)
-                for(int j=0 ; j < temp[i].size() ; j++)
-                    for(int k=0 ; k < temp[i][j].size() ; k++)
-                        if(temp[i][j][k] <= 0)
-                            temp_grads[i][j][k] = 0;
-        }
-        return t_grads;
-    }
 
-    void update_weights(double lr = 0.1) {
-        // ReLU has no weights, so this is correct.
-    }
+        void update_weights(double lr = 0.1) {
+            // ReLU has no weights, so this is correct.
+        }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
 };
 
 
@@ -901,3 +968,17 @@ Initializer GlobalInitializerStrategies = [] {
     // This will be "moved" into G_Initializer efficiently.
     return init; 
 }(); // The () at the end immediately calls the lambda.
+
+
+CEREAL_REGISTER_TYPE(Dense);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Dense);
+CEREAL_REGISTER_TYPE(Conv2D);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Conv2D);
+CEREAL_REGISTER_TYPE(MaxPool2D);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, MaxPool2D);
+CEREAL_REGISTER_TYPE(ReLU);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, ReLU);
+CEREAL_REGISTER_TYPE(Softmax);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Softmax);
+CEREAL_REGISTER_TYPE(Flatten);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Flatten);

@@ -1,5 +1,10 @@
 #include <ostream>
 #include <cmath>
+#include "cereal/cereal.hpp"
+#include "cereal/types/vector.hpp"
+#include "cereal/types/string.hpp"
+#include "cereal/types/polymorphic.hpp"
+
 using namespace std;
 
 class Value{
@@ -48,6 +53,14 @@ class Value{
 
         string as_string() const{
             return ("Value(val: " + to_string(this->val) + ", grad: " + to_string(this->grad) + ")");
+        }
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            archive(
+                CEREAL_NVP(label),      // Saves the label
+                CEREAL_NVP(val)
+            );
         }
 };
 
