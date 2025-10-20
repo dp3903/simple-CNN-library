@@ -57,14 +57,12 @@ class Layer{
 class Dense : public Layer{
     public:
         vector<vector<Value>> weights;
+        vector<Value> biases;
         Tensor1D input;
-
-        Dense(){}
-
-        Dense(string label) : Layer(label){}
 
         Dense(string label, size_t output_size) : Layer(label){
             this->weights = vector<vector<Value>>(output_size);
+            this->biases = vector<Value>(output_size);
             this->output_shape = {0, 0, output_size};
         }
 
@@ -80,6 +78,7 @@ class Dense : public Layer{
             
             for(int i=0 ; i < output_shape.width ; i++){
                 weights[i] = vector<Value>(input_shape.width);
+                biases[i] = Value("Dense: "+this->label+" bias("+to_string(i)+").", generate_random_in_range(-0.1, 0.1));
                 for(int j=0 ; j < input_shape.width ; j++){
                     weights[i][j] = Value("Dense: "+this->label+" param("+to_string(i)+','+to_string(j)+").", generate_random_in_range(-0.1, 0.1));
                 }
@@ -87,10 +86,10 @@ class Dense : public Layer{
         }
 
         int parameter_count(){
-            if(weights.empty() || weights[0].empty())
+            if(weights.empty() || weights[0].empty() || biases.empty())
                 return -1;
 
-            return (input_shape.width * output_shape.width);
+            return (input_shape.width * output_shape.width + output_shape.width);
         }
 
         Tensor forward(Tensor& t_input){
@@ -109,6 +108,7 @@ class Dense : public Layer{
                     
             try{
                 for(int i=0 ; i < weights.size() ; i++){
+                    op[i] = biases[i].val;
                     for(int j=0 ; j < weights[i].size() ; j++){
                         op[i] += (input[j] * weights[i][j].val);
                     }
@@ -138,6 +138,7 @@ class Dense : public Layer{
 
             vector<double> op = vector<double>(weights[0].size(), 0);
             for(int i=0 ; i<weights.size() ; i++){
+                (this->trainable) && (biases[i].grad += grads[i]);
                 for(int j=0 ; j<weights[i].size() ; j++){
                     (this->trainable) && (weights[i][j].grad += input[j] * grads[i]);
                     op[j] += weights[i][j].val * grads[i];
@@ -154,6 +155,8 @@ class Dense : public Layer{
 
         void update_weights(double learning_rate = 0.1){
             for(int i=0 ; i<weights.size() ; i++){
+                biases[i].val -= learning_rate * biases[i].grad;
+                biases[i].grad = 0;
                 for(int j=0 ; j<weights[i].size() ; j++){
                     weights[i][j].val -= learning_rate * weights[i][j].grad;
                     weights[i][j].grad = 0;
@@ -165,13 +168,13 @@ class Dense : public Layer{
 class Conv2D : public Layer{
     public:
         vector<vector<vector<vector<Value>>>> filters;
+        vector<Value> biases;
         Tensor3D input;
         int stride;
         int padding;
         int filter_size;
         int dilation;
 
-        Conv2D(){}
 
         Conv2D(
             string label,
@@ -192,6 +195,7 @@ class Conv2D : public Layer{
             this->padding = padding;
             this->dilation = dilation;
             this->filters = vector<vector<vector<vector<Value>>>>(no_of_filters);
+            this->biases = vector<Value>(no_of_filters);
         }
 
         Conv2D(
@@ -226,6 +230,10 @@ class Conv2D : public Layer{
             this->input = vector<vector<vector<double>>>(input_shape.channels, vector<vector<double>>(input_shape.height, vector<double>(input_shape.width)));
         
             for(int i=0 ; i < filters.size() ; i++){
+                biases[i] = Value(
+                    "Conv2D: "+this->label+" bias("+to_string(i)+").",
+                    generate_random_in_range(-0.1, 0.1)
+                );
                 for(int j=0 ; j < filters[i].size() ; j++){
                     for(int k=0 ; k < filters[i][j].size() ; k++){
                         for(int l=0 ; l < filters[i][j][k].size() ; l++){
@@ -240,9 +248,9 @@ class Conv2D : public Layer{
         }
 
         int parameter_count(){
-            if(filters.empty() || filters[0].empty() || filters[0][0].empty() || filters[0][0][0 ].empty())
+            if(filters.empty() || filters[0].empty() || filters[0][0].empty() || filters[0][0][0 ].empty() || biases.empty())
                 return -1;
-            return (filters.size() * filters[0].size() * filters[0][0].size() * filters[0][0][0].size());
+            return (filters.size() * filters[0].size() * filters[0][0].size() * filters[0][0][0].size() + biases.size());
         }
 
         Tensor forward(Tensor& t_input){
@@ -253,13 +261,13 @@ class Conv2D : public Layer{
             if(input.size() != input_shape.channels)
                 throw runtime_error("Invalid input channel dimensions for Conv2D layer: "+this->label+". expected '"+to_string(input_shape.channels)+"' recieved '"+to_string(input.size())+"'.");
             
-            vector<vector<vector<double>>> ans = vector<vector<vector<double>>>(output_shape.channels, vector<vector<double>>(output_shape.width, vector<double>(output_shape.height,0)));
+            Tensor3D ans = Tensor3D(output_shape.channels, Tensor2D(output_shape.width, Tensor1D(output_shape.height,0)));
             for (int oc = 0; oc < output_shape.channels; oc++) {
                 vector<vector<double>> ans_oc(output_shape.width, vector<double>(output_shape.height, 0));
                 for (int ic = 0; ic < input_shape.channels; ic++) {
                     ans_oc = ans_oc + convolve(input[ic], filters[oc][ic], padding, stride, dilation);
                 }
-                ans[oc] = ans_oc;
+                ans[oc] = (ans_oc + biases[oc].val);
             }
 
             this -> input = input;
@@ -283,6 +291,7 @@ class Conv2D : public Layer{
                     if(grads[oc][out_x].size() != output_shape.height)
                         throw runtime_error("Invalid y-dim in output grads for layer: "+this->label);
                     for (int out_y = 0; out_y < output_shape.height; out_y++) {
+                        (this->trainable) && (biases[oc].grad += grads[oc][out_x][out_y]);
                         for (int ic = 0; ic < input_shape.channels; ic++) {
                             for (int i = 0; i < filter_size; i++) {
                                 for (int j = 0; j < filter_size; j++) {
@@ -303,6 +312,8 @@ class Conv2D : public Layer{
 
         void update_weights(double learning_rate = 0.1){
             for(int i=0 ; i < filters.size() ; i++){
+                biases[i].val -= learning_rate * biases[i].grad;
+                biases[i].grad = 0;
                 for(int j=0 ; j < filters[i].size() ; j++){
                     for(int k=0 ; k < filters[i][j].size() ; k++){
                         for(int l=0 ; l < filters[i][j][k].size() ; l++){

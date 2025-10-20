@@ -470,8 +470,8 @@ int main(){
     // testing_flatten();
 
     // tesing CNN
-    // testing_CNN();
+    testing_CNN();
 
     // testing auto initializer
-    testing_auto_initializer();
+    // testing_auto_initializer();
 }

@@ -56,6 +56,34 @@ std::enable_if_t<
     std::is_same_v<T, Value>,
     vector<T>
 > 
+operator+(vector<T> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] + b;
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<T>
+> 
+operator-(vector<T> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] - b;
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<T>
+> 
 operator*(vector<T> a, double b){
     for(int i=0 ; i<a.size() ; i++)
         a[i] = a[i] * b;
@@ -108,6 +136,34 @@ operator-(vector<vector<T>> a, vector<vector<T>> b){
 
     for(int i=0 ; i<a.size() ; i++)
         a[i] = a[i] - b[i];
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<vector<T>>
+> 
+operator+(vector<vector<T>> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] + b;
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<vector<T>>
+> 
+operator-(vector<vector<T>> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] - b;
     
     return a;
 }
@@ -182,6 +238,34 @@ std::enable_if_t<
     std::is_same_v<T, Value>,
     vector<vector<vector<T>>>
 > 
+operator+(vector<vector<vector<T>>> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] + b;
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<vector<vector<T>>>
+> 
+operator-(vector<vector<vector<T>>> a, double b){
+    for(int i=0 ; i<a.size() ; i++)
+        a[i] = a[i] - b;
+    
+    return a;
+}
+
+template <typename T>
+std::enable_if_t<
+    std::is_same_v<T, int> || 
+    std::is_same_v<T, double> || 
+    std::is_same_v<T, Value>,
+    vector<vector<vector<T>>>
+> 
 operator*(vector<vector<vector<T>>> a, double b){
     for(int i=0 ; i<a.size() ; i++)
         a[i] = a[i] * b;
@@ -238,7 +322,7 @@ operator<<(ostream& os, const vector<vector<T>>& obj) {
 Tensor operator+(const Tensor& lhs, const Tensor& rhs) {
     // std::visit takes a visitor (our lambda) and one or more variants.
     // It calls the lambda with the contained values of the variants.
-    return std::visit([](const auto& a, const auto& b) -> Tensor {
+    return std::visit([&](const auto& a, const auto& b) -> Tensor {
         // Use a compile-time if to check if the two variants hold the same type.
         if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
             return a+b;
