@@ -8,25 +8,41 @@
 class Model{
     public:
         string name;
-        vector<Layer*> layers;
-        LossFunction* loss;
-        
-        Model(){}
+        vector<std::unique_ptr<Layer>> layers;
+        unique_ptr<LossFunction> loss;
 
-        // constructor taking an initializer_list of unique_ptrs
-        Model(vector<Layer*> list, LossFunction* loss = new MSELoss()){
-            layers = list;
-            this->loss = loss;
+        Model() = default; // Use default for empty constructor
+
+        Model(std::vector<std::unique_ptr<Layer>> layer_list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
+            : layers(std::move(layer_list)), loss(std::move(loss_func)) {}
+
+        Model(std::string model_name, std::vector<std::unique_ptr<Layer>> layer_list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
+            : name(std::move(model_name)), layers(std::move(layer_list)), loss(std::move(loss_func)) {}
+
+        Model(std::initializer_list<Layer*> list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
+            : loss(std::move(loss_func))
+        {
+            layers.reserve(list.size());
+            for (Layer* ptr : list) {
+                // For each raw pointer, create a unique_ptr that takes ownership
+                // and add it to our member vector.
+                layers.emplace_back(ptr);
+            }
         }
 
-        Model(string name, vector<Layer*> list, LossFunction* loss = new MSELoss()){
-            this->name = name;
-            layers = list;
-            this->loss = loss;
+        Model(std::string model_name, std::initializer_list<Layer*> list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
+            : name(std::move(model_name)), loss(std::move(loss_func))
+        {
+            layers.reserve(list.size());
+            for (Layer* ptr : list) {
+                layers.emplace_back(ptr);
+            }
         }
+
+        ~Model() = default;
 
         Tensor run(Tensor ip){
-            for(Layer* l: layers){
+            for(const auto& l: layers){
                 try{
                     ip = l->forward(ip);
                 }
@@ -74,7 +90,7 @@ class Model{
                     // cout<<"\b\b ]\n";
                 }
 
-                for(Layer* l: layers)
+                for(const auto& l: layers)
                     l->update_weights(learning_rate);
                 
                 loses[i] = iteration_loss/batch.size();
@@ -90,7 +106,7 @@ class Model{
             cout<<"\t-"<<(string("-")*131)<<endl;
             cout<<"\t|"<<setw(25)<<"Layer"<<" "<<setw(25)<<"input_shape"<<" "<<setw(25)<<"output_shape"<<" "<<setw(25)<<"Parameters"<<" "<<setw(25)<<"Trainable"<<" |"<<endl;
             cout<<"\t-"<<(string("-")*131)<<endl;
-            for(Layer* l: this->layers){
+            for(const auto& l: this->layers){
                 int params = l->parameter_count();
                 cout<<"\t|"<<setw(25)<<l->label<<" "<<setw(25)<<l->input_shape<<" "<<setw(25)<<l->output_shape<<" "<<setw(25)<<(params>=0?to_string(params):"uninitialized")<<" "<<setw(25)<<(l->trainable?"true":"false")<<" |"<<endl;
                 if(total_params >= 0 && params >= 0){
@@ -113,24 +129,14 @@ class Model{
         }
 
         void set_traianable(bool s){
-            for(Layer* l: layers)
+            for(const auto& l: layers)
                 l->trainable = false;
         }
 
         bool get_traianable(){
-            for(Layer* l: layers)
+            for(const auto& l: layers)
                 if(l->trainable)
                     return true;
             return false;
         }
 };
-
-
-vector<Layer*> AutoInitializer(vector<Layer*> layers){
-    for(int i=0 ; i<layers.size() ; i++){
-        // const std::type_info& info = typeid(*layers[i]);
-        // cout<<"Layer: "<<i<<" name: "<<info.name()<<endl;
-        
-    }
-    return {};
-}

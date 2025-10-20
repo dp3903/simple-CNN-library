@@ -720,7 +720,7 @@ public:
     }
 
     // The main method that configures the whole network
-    void compile(std::vector<Layer*>& network, Shape first_layer_input_shape) {
+    void compile(std::vector<std::unique_ptr<Layer>>& network, Shape first_layer_input_shape) {
         if (network.empty()) return;
 
         // 1. Manually initialize the first layer
@@ -730,8 +730,8 @@ public:
 
         // 2. Loop through the rest of the layers
         for (size_t i = 1; i < network.size(); ++i) {
-            Layer* previous = network[i - 1];
-            Layer* current = network[i];
+            Layer* previous = network[i - 1].get();
+            Layer* current = network[i].get();
             // cout<<"Initializing layer: "<<i<<", Previous output shape: "<<previous->output_shape<<endl;
 
             // Find the strategy for the current layer's type
