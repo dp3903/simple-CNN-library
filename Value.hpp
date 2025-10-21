@@ -1,3 +1,4 @@
+#pragma once
 #include <ostream>
 #include <cmath>
 #include "cereal/cereal.hpp"
@@ -63,6 +64,28 @@ class Value{
             );
         }
 };
+
+// A simple struct to hold shape information
+struct Shape {
+    size_t channels = 0;
+    size_t height = 0;
+    size_t width = 0;
+
+    size_t total_elements() const { return max(1,(int)channels) * max(1,(int)height) * width; }
+
+    string as_string() const { return ("Shape(" + to_string(channels) + ", " + to_string(height) + ", " + to_string(width) + ")"); }
+
+    template <class Archive>
+    void serialize(Archive& archive) {
+        archive(CEREAL_NVP(channels));
+        archive(CEREAL_NVP(height));
+        archive(CEREAL_NVP(width));
+    }
+};
+
+ostream& operator<<(ostream& os, const Shape& s){
+    return (os << s.as_string() ); 
+}
 
 ostream& operator<<(ostream& os, const Value& obj) {
     return (os << obj.as_string());

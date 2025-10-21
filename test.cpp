@@ -1,7 +1,7 @@
 #define NOMINMAX
 #define NODATA
 #include "indicators.hpp"
-#include "CNN.hpp"
+#include "MLlib.hpp"
 #include <utility>
 #include <iostream>
 #include <fstream>
@@ -91,6 +91,8 @@ void test_ann(){
         new Dense("Layer3", 128, 10),
         new Softmax("softmax1")
     });
+
+    SGD optim = SGD(test_model.layers, 0.1);
     
     int n_epochs = 5;
     int n_iterations_per_batch = 1;
@@ -147,6 +149,8 @@ void test_ann(){
                 /*iterations per batch*/    n_iterations_per_batch,
                 /*learning rate*/           learning_rate
             );
+            optim.step();
+            optim.zero_grad();
             loses.insert(loses.end(),l.begin(),l.end());
             // cout<<"loss: "<<l.back()<<"\r";
             p.set_option(indicators::option::PostfixText{"Batch: "+to_string(i)+" Batch Loss: "+to_string(l.back())});
@@ -322,6 +326,9 @@ void testing_CNN(){
         new Dense("Dense Layer2", 128, 10),
         new Softmax("softmax1")
     });
+
+    Adam optim = Adam(test_model.layers, 0.1);
+
     cout<<"Input shape: "<<test_model.layers[0]->input_shape<<endl;
     int n_epochs = 5;
     int n_iterations_per_batch = 1;
@@ -380,6 +387,8 @@ void testing_CNN(){
                 /*iterations per batch*/    n_iterations_per_batch,
                 /*learning rate*/           learning_rate
             );
+            optim.step();
+            optim.zero_grad();
             loses.insert(loses.end(),l.begin(),l.end());
             // cout<<"loss: "<<l.back()<<"\r";
             p.set_option(indicators::option::PostfixText{"Batch: "+to_string(i)+" Batch Loss: "+to_string(l.back())});

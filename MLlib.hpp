@@ -1,5 +1,8 @@
+#pragma once
 #include "Layers.hpp"
 #include "Losses.hpp"
+#include "Initializer.hpp"
+#include "Optimizers.hpp"
 #include <memory>
 #include <iomanip>
 #include <iostream>
@@ -10,19 +13,28 @@
 class Model{
     public:
         string name;
-        vector<std::unique_ptr<Layer>> layers;
+        vector<unique_ptr<Layer>> layers;
         unique_ptr<LossFunction> loss;
 
         Model() = default; // Use default for empty constructor
 
-        Model(std::vector<std::unique_ptr<Layer>> layer_list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
-            : layers(std::move(layer_list)), loss(std::move(loss_func)) {}
+        Model(
+            vector<unique_ptr<Layer>> layer_list,
+            unique_ptr<LossFunction> loss_func = make_unique<MSELoss>()
+        ) : layers(move(layer_list)), loss(move(loss_func))
+        {}
 
-        Model(std::string model_name, std::vector<std::unique_ptr<Layer>> layer_list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
-            : name(std::move(model_name)), layers(std::move(layer_list)), loss(std::move(loss_func)) {}
+        Model(
+            string model_name,
+            vector<unique_ptr<Layer>> layer_list,
+            unique_ptr<LossFunction> loss_func = make_unique<MSELoss>()
+        ) : name(move(model_name)), layers(move(layer_list)), loss(move(loss_func))
+        {}
 
-        Model(std::initializer_list<Layer*> list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
-            : loss(std::move(loss_func))
+        Model(
+            initializer_list<Layer*> list,
+            unique_ptr<LossFunction> loss_func = make_unique<MSELoss>()
+        ) : loss(move(loss_func))
         {
             layers.reserve(list.size());
             for (Layer* ptr : list) {
@@ -32,8 +44,11 @@ class Model{
             }
         }
 
-        Model(std::string model_name, std::initializer_list<Layer*> list, std::unique_ptr<LossFunction> loss_func = std::make_unique<MSELoss>())
-            : name(std::move(model_name)), loss(std::move(loss_func))
+        Model(
+            string model_name,
+            initializer_list<Layer*> list,
+            unique_ptr<LossFunction> loss_func = make_unique<MSELoss>()
+        ) : name(move(model_name)), loss(move(loss_func))
         {
             layers.reserve(list.size());
             for (Layer* ptr : list) {
@@ -49,7 +64,7 @@ class Model{
                     ip = l->forward(ip);
                 }
                 catch (const exception& e) {
-                    std::cerr << "Error: " << e.what() << std::endl;
+                    cerr << "Error: " << e.what() << endl;
                     exit(1);
                 }
             }
@@ -62,7 +77,7 @@ class Model{
                     grads = layers[u]->back_prop(grads);
                 }
                 catch (const exception& e) {
-                    std::cerr << "Error: " << e.what() << std::endl;
+                    cerr << "Error: " << e.what() << endl;
                     exit(1);
                 }
             }
@@ -92,8 +107,7 @@ class Model{
                     // cout<<"\b\b ]\n";
                 }
 
-                for(const auto& l: layers)
-                    l->update_weights(learning_rate);
+                // optim->step();
                 
                 loses[i] = iteration_loss/batch.size();
                 // cout<<"Iteration: "<<i<<" Loss: "<<loses[i]<<'\r';
@@ -153,15 +167,15 @@ class Model{
 
 
 // --- SAVING ---
-void save_model(const Model& model, const std::string& path) {
-    std::ofstream os(path, std::ios::binary);
+void save_model(const Model& model, const string& path) {
+    ofstream os(path, ios::binary);
     cereal::BinaryOutputArchive archive(os);
     archive(model); // That's it! Cereal saves the whole polymorphic vector.
 }
 
 // --- LOADING ---
-void load_model(Model& model, const std::string& path) {
-    std::ifstream is(path, std::ios::binary);
+void load_model(Model& model, const string& path) {
+    ifstream is(path, ios::binary);
     cereal::BinaryInputArchive archive(is);
     archive(model); // Cereal reconstructs the entire model.
 }

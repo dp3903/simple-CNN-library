@@ -1,9 +1,8 @@
+#pragma once
 #include <vector>
 #include <iostream>
 #include <variant>
 #include <iomanip>
-#include <type_traits>
-#include <typeindex> // Needed for using type_info as a map key
 #include "Overloads.hpp"
 
 
@@ -13,27 +12,6 @@ double generate_random_in_range(double low, double high){
     return (double(rand()) / RAND_MAX)*(high-low) + low;
 }
 
-// A simple struct to hold shape information
-struct Shape {
-    size_t channels = 0;
-    size_t height = 0;
-    size_t width = 0;
-
-    size_t total_elements() const { return max(1,(int)channels) * max(1,(int)height) * width; }
-
-    string as_string() const { return ("Shape(" + to_string(channels) + ", " + to_string(height) + ", " + to_string(width) + ")"); }
-
-    template <class Archive>
-    void serialize(Archive& archive) {
-        archive(CEREAL_NVP(channels));
-        archive(CEREAL_NVP(height));
-        archive(CEREAL_NVP(width));
-    }
-};
-
-ostream& operator<<(ostream& os, const Shape& s){
-    return (os << s.as_string() ); 
-}
 
 class Layer{
     public:
@@ -56,7 +34,7 @@ class Layer{
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
         
-        virtual void update_weights(double learning_rate = 0.1) = 0;
+        virtual void update_weights(const std::function<void(Value&, int&)>& visitor) = 0;
         virtual void compute_output_shape() = 0;
         virtual int parameter_count() = 0;
 
@@ -92,7 +70,7 @@ class Dense : public Layer{
             compute_output_shape();
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             if(weights.empty())
                 throw invalid_argument("Cannot compute output shape before initialization.");
             
@@ -105,14 +83,14 @@ class Dense : public Layer{
             }
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             if(weights.empty() || weights[0].empty() || biases.empty())
                 return -1;
 
             return (input_shape.width * output_shape.width + output_shape.width);
         }
 
-        Tensor forward(Tensor& t_input){
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Dense layer: "+this->label+".");
             
@@ -146,7 +124,7 @@ class Dense : public Layer{
             }
         }
 
-        Tensor back_prop(Tensor& t_grads){
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Dense layer: "+this->label+".");
             
@@ -173,14 +151,19 @@ class Dense : public Layer{
             return op;
         }
 
-        void update_weights(double learning_rate = 0.1){
-            for(int i=0 ; i<weights.size() ; i++){
-                biases[i].val -= learning_rate * biases[i].grad;
-                biases[i].grad = 0;
-                for(int j=0 ; j<weights[i].size() ; j++){
-                    weights[i][j].val -= learning_rate * weights[i][j].grad;
-                    weights[i][j].grad = 0;
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override{
+            int index=0;
+            for (auto& row : weights) {
+                for (auto& w : row) {
+                    // Apply the visitor function to each weight
+                    visitor(w,index);
+                    index++;
                 }
+            }
+            for (auto& b : biases) {
+                // Apply the visitor function to each bias
+                visitor(b,index);
+                index++;
             }
         }
 
@@ -249,7 +232,7 @@ class Conv2D : public Layer{
             
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             int effective_filter_size = dilation * (filter_size - 1) + 1;
             int no_of_filters = filters.size();
             this->output_shape = {
@@ -278,13 +261,13 @@ class Conv2D : public Layer{
             }
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             if(filters.empty() || filters[0].empty() || filters[0][0].empty() || filters[0][0][0 ].empty() || biases.empty())
                 return -1;
             return (filters.size() * filters[0].size() * filters[0][0].size() * filters[0][0][0].size() + biases.size());
         }
 
-        Tensor forward(Tensor& t_input){
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor3D>(t_input))
                 throw runtime_error("Invalid input Tensor to Conv2D layer: "+this->label+".");
             
@@ -306,7 +289,7 @@ class Conv2D : public Layer{
             return ans;
         }
         
-        Tensor back_prop(Tensor& t_grads){
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor3D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Conv2D layer: "+this->label+".");
             
@@ -341,18 +324,22 @@ class Conv2D : public Layer{
             return ans;
         }
 
-        void update_weights(double learning_rate = 0.1){
-            for(int i=0 ; i < filters.size() ; i++){
-                biases[i].val -= learning_rate * biases[i].grad;
-                biases[i].grad = 0;
-                for(int j=0 ; j < filters[i].size() ; j++){
-                    for(int k=0 ; k < filters[i][j].size() ; k++){
-                        for(int l=0 ; l < filters[i][j][k].size() ; l++){
-                            filters[i][j][k][l].val -= learning_rate * filters[i][j][k][l].grad;
-                            filters[i][j][k][l].grad = 0;
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override{
+            int index=0;
+            for(auto& oc: filters){
+                for(auto& ic: oc){
+                    for(auto& row: ic){
+                        for(auto& w: row){
+                            visitor(w,index);
+                            index++;
                         }
                     }
                 }
+            }
+
+            for(auto& b: biases){
+                visitor(b,index);
+                index++;
             }
         }
 
@@ -375,15 +362,15 @@ class Flatten : public Layer{
             this->label = label;
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             output_shape = {0, 0, input_shape.total_elements()};
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             return 0;
         }
 
-        Tensor forward(Tensor& t_input) {
+        Tensor forward(Tensor& t_input) override  {
             Tensor1D output;
             if(holds_alternative<Tensor1D>(t_input)){
                 const Tensor1D& input = std::get<Tensor1D>(t_input);
@@ -409,7 +396,7 @@ class Flatten : public Layer{
             return output;
         }
 
-        Tensor back_prop(Tensor& t_grads) {
+        Tensor back_prop(Tensor& t_grads) override {
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Flatten layer: "+this->label+".");
 
@@ -440,9 +427,7 @@ class Flatten : public Layer{
             }
         }
 
-        void update_weights(double lr = 0.1) {
-            // Flatten has no weights, so this is correct.
-        }
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override{}
 
         template <class Archive>
         void serialize(Archive& archive) {
@@ -493,7 +478,7 @@ class MaxPool2D : public Layer {
             compute_output_shape();
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             int effective_filter_size = dilation * (filter_size - 1) + 1;
             this->output_shape = {
                 input_shape.channels,
@@ -502,12 +487,12 @@ class MaxPool2D : public Layer {
             };
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             return 0;
         }
 
         // FIX: Pass input by const reference to avoid expensive copy
-        Tensor forward(Tensor& t_input) {
+        Tensor forward(Tensor& t_input) override  {
             if (!holds_alternative<Tensor3D>(t_input))
                 throw invalid_argument("Invalid input Tensor to MaxPool2D layer: " + this->label);
 
@@ -550,7 +535,7 @@ class MaxPool2D : public Layer {
         }
 
         // FIX: Pass grads by const reference
-        Tensor back_prop(Tensor& t_grads) {
+        Tensor back_prop(Tensor& t_grads) override {
             if (!holds_alternative<Tensor3D>(t_grads))
                 throw invalid_argument("Invalid grads Tensor to MaxPool2D layer: " + this->label);
 
@@ -579,9 +564,7 @@ class MaxPool2D : public Layer {
             return input_grads;
         }
         
-        void update_weights(double learning_rate) override {
-            // MaxPool has no weights, so this is correct
-        }
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
 
         template <class Archive>
         void serialize(Archive& archive) {
@@ -600,15 +583,15 @@ class Softmax : public Layer{
             this->label = label;
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             output_shape = input_shape;
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             return 0;
         }
 
-        Tensor forward(Tensor& t_input){
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw invalid_argument("Invalid input Tensor to Softmax layer: "+this->label+".");
 
@@ -631,7 +614,7 @@ class Softmax : public Layer{
             return op;
         }
 
-        Tensor back_prop(Tensor& t_grads){
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
             
@@ -664,7 +647,7 @@ class Softmax : public Layer{
             return grads;
         }
 
-        void update_weights(double lr = 0.1){}
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
 
         template <class Archive>
         void serialize(Archive& archive) {
@@ -684,15 +667,15 @@ class ReLU : public Layer {
             this->label = label;
         }
 
-        void compute_output_shape(){
+        void compute_output_shape() override{
             output_shape = input_shape;
         }
 
-        int parameter_count(){
+        int parameter_count() override{
             return 0;
         }
 
-        Tensor forward(Tensor& t_input) {
+        Tensor forward(Tensor& t_input) override  {
             this->input_cache = t_input; // Store original input
             if(holds_alternative<Tensor1D>(t_input)){
                 Tensor1D& temp = std::get<Tensor1D>(t_input);
@@ -718,7 +701,7 @@ class ReLU : public Layer {
             return t_input;
         }
 
-        Tensor back_prop(Tensor& t_grads) {
+        Tensor back_prop(Tensor& t_grads) override {
             if(holds_alternative<Tensor1D>(t_grads)){
                 Tensor1D& temp = std::get<Tensor1D>(input_cache);
                 Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
@@ -746,9 +729,7 @@ class ReLU : public Layer {
             return t_grads;
         }
 
-        void update_weights(double lr = 0.1) {
-            // ReLU has no weights, so this is correct.
-        }
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
 
         template <class Archive>
         void serialize(Archive& archive) {
@@ -756,229 +737,3 @@ class ReLU : public Layer {
             archive(cereal::base_class<Layer>(this)); 
         }
 };
-
-
-// The interface for our initialization strategies
-class InitializerStrategy {
-public:
-    virtual ~InitializerStrategy() = default;
-
-    // The method to be overridden. It takes the layer to be initialized
-    // and the previous layer (which is already initialized).
-    virtual void initialize(Layer* current_layer, const Layer* previous_layer) const = 0;
-};
-
-class Initializer {
-private:
-    // The registry mapping a Layer's type_index to its initialization strategy
-    std::unordered_map<std::type_index, std::unique_ptr<InitializerStrategy>> strategies;
-
-public:
-    void show_strategies(){
-        for(auto it = strategies.begin() ; it != strategies.end() ; it++){
-            cout<<it->first.name()<<endl;
-        }
-    }
-
-    // Method to register a strategy for a specific Layer type
-    template <typename T>
-    void register_strategy(std::unique_ptr<InitializerStrategy> strategy) {
-        strategies[std::type_index(typeid(T))] = std::move(strategy);
-    }
-
-    // The main method that configures the whole network
-    void compile(std::vector<std::unique_ptr<Layer>>& network, Shape first_layer_input_shape) {
-        if (network.empty()) return;
-
-        // 1. Manually initialize the first layer
-        // cout<<"Initializing layer: 0"<<endl;
-        network[0]->input_shape = first_layer_input_shape;
-        network[0]->compute_output_shape();
-
-        // 2. Loop through the rest of the layers
-        for (size_t i = 1; i < network.size(); ++i) {
-            Layer* previous = network[i - 1].get();
-            Layer* current = network[i].get();
-            // cout<<"Initializing layer: "<<i<<", Previous output shape: "<<previous->output_shape<<endl;
-
-            // Find the strategy for the current layer's type
-            auto it = strategies.find(std::type_index(typeid(*current)));
-            if (it == strategies.end()) {
-                throw std::runtime_error("No initializer strategy found for layer type: " + std::string(typeid(*current).name()));
-            }
-            // cout<<"Strategy found: "<<it->first.name()<<endl;
-
-            // Execute the strategy
-            it->second->initialize(current, previous);
-        }
-    }
-};
-
-// Strategy for a Dense layer
-class DenseInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete Dense type
-        Dense* dense_layer = dynamic_cast<Dense*>(current_layer);
-        if (!dense_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        if(prev_output_shape.channels != 0 || prev_output_shape.height != 0)
-            throw invalid_argument("Initializer error: Input shape to a Dense layer must be linear. for layer: "+current_layer->label+".");
-
-        // 2. Set the current layer's input shape
-        dense_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        dense_layer->compute_output_shape();
-    }
-};
-
-// Strategy for a Conv2D layer
-class Conv2DInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete Conv2D type
-        Conv2D* conv2d_layer = dynamic_cast<Conv2D*>(current_layer);
-        if (!conv2d_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        if(prev_output_shape.channels == 0 || prev_output_shape.height == 0)
-            throw invalid_argument("Initializer error: Input shape to a Conv2D layer must be a 3D Tensor. for layer: "+current_layer->label+".");
-
-        // 2. Set the current layer's input shape
-        conv2d_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        conv2d_layer->compute_output_shape();
-    }
-};
-
-// Strategy for a MaxPool2D layer
-class MaxPool2DInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete MaxPool2D type
-        MaxPool2D* pool_layer = dynamic_cast<MaxPool2D*>(current_layer);
-        if (!pool_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        if(prev_output_shape.channels == 0 || prev_output_shape.height == 0)
-            throw invalid_argument("Initializer error: Input shape to a MaxPpol2D layer must be a 3D Tensor. for layer: "+current_layer->label+".");
-
-        // 2. Set the current layer's input shape
-        pool_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        pool_layer->compute_output_shape();
-    }
-};
-
-// Strategy for a Flatten layer
-class FlattenInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete Flatten type
-        Flatten* flatten_layer = dynamic_cast<Flatten*>(current_layer);
-        if (!flatten_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        // 2. Set the current layer's input shape
-        flatten_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        flatten_layer->compute_output_shape();
-    }
-};
-
-// Strategy for a ReLU layer
-class ReLUInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete ReLU type
-        ReLU* relu_layer = dynamic_cast<ReLU*>(current_layer);
-        if (!relu_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        // 2. Set the current layer's input shape
-        relu_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        relu_layer->compute_output_shape();
-    }
-};
-
-// Strategy for a Softmax layer
-class SoftmaxInitializer : public InitializerStrategy {
-public:
-    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
-        // Safely downcast the pointer to the concrete Softmax type
-        Softmax* softmax_layer = dynamic_cast<Softmax*>(current_layer);
-        if (!softmax_layer) return; // Or throw an error
-
-        // The magic happens here:
-        // 1. Get the previous layer's output shape
-        const Shape& prev_output_shape = previous_layer->output_shape;
-
-        if(prev_output_shape.channels != 0 || prev_output_shape.height != 0)
-            throw invalid_argument("Initializer error: Input shape to a Dense layer must be linear. for layer: "+current_layer->label+".");
-
-        // 2. Set the current layer's input shape
-        softmax_layer->input_shape = prev_output_shape;
-        
-        // 3. (Important!) Tell the layer to initialize its internal weights
-        //    and compute its own output shape based on the new input shape.
-        softmax_layer->compute_output_shape();
-    }
-};
-
-Initializer GlobalInitializerStrategies = [] {
-    Initializer init; // Create a temporary Initializer
-
-    // Perform all your actions on the temporary object
-    init.register_strategy<Dense>(std::make_unique<DenseInitializer>());
-    init.register_strategy<Conv2D>(std::make_unique<Conv2DInitializer>());
-    init.register_strategy<Flatten>(std::make_unique<FlattenInitializer>());
-    init.register_strategy<MaxPool2D>(std::make_unique<MaxPool2DInitializer>());
-    init.register_strategy<ReLU>(std::make_unique<ReLUInitializer>());
-    init.register_strategy<Softmax>(std::make_unique<SoftmaxInitializer>());
-    // ... add more strategies ...
-
-    // Return the fully configured object.
-    // This will be "moved" into G_Initializer efficiently.
-    return init; 
-}(); // The () at the end immediately calls the lambda.
-
-
-CEREAL_REGISTER_TYPE(Dense);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Dense);
-CEREAL_REGISTER_TYPE(Conv2D);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Conv2D);
-CEREAL_REGISTER_TYPE(MaxPool2D);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, MaxPool2D);
-CEREAL_REGISTER_TYPE(ReLU);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, ReLU);
-CEREAL_REGISTER_TYPE(Softmax);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Softmax);
-CEREAL_REGISTER_TYPE(Flatten);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Flatten);

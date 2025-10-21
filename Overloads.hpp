@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <iostream>
 #include "Value.hpp"
@@ -14,6 +15,27 @@ using Data = pair<Tensor,Tensor>;
 using Batch = vector<Data>;
 double inf = std::numeric_limits<double>::infinity();
 double negInf = -inf;
+
+Tensor create_tensor(const Shape& shape, double initial_value = 0.0) {
+    // Logic to decide which type of tensor to create based on the shape
+    
+    // Case 1: 1D Tensor (e.g., shape = {0, 0, 128})
+    if (shape.width > 0 && shape.height == 0 && shape.channels == 0) {
+        return Tensor1D(shape.width, initial_value);
+    }
+    // Case 2: 2D Tensor (e.g., shape = {0, 28, 28})
+    else if (shape.width > 0 && shape.height > 0 && shape.channels == 0) {
+        return Tensor2D(shape.height, Tensor1D(shape.width, initial_value));
+    }
+    // Case 3: 3D Tensor (e.g., shape = {3, 28, 28})
+    else if (shape.width > 0 && shape.height > 0 && shape.channels > 0) {
+        return Tensor3D(shape.channels, Tensor2D(shape.height, Tensor1D(shape.width, initial_value)));
+    }
+    // Handle invalid shape
+    else {
+        throw std::invalid_argument("Invalid shape provided to create_tensor.");
+    }
+}
 
 template <typename T>
 std::enable_if_t<
