@@ -26,11 +26,11 @@ class Layer{
             this->label = name;
         }
 
-        virtual Tensor forward(Tensor& input){
+        virtual Tensor forward(Tensor input){
             throw runtime_error("Invalid input for layer: "+this->label+".");
         }
 
-        virtual Tensor back_prop(Tensor& grads){
+        virtual Tensor back_prop(Tensor grads){
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
         
@@ -90,7 +90,7 @@ class Dense : public Layer{
             return (input_shape.width * output_shape.width + output_shape.width);
         }
 
-        Tensor forward(Tensor& t_input) override {
+        Tensor forward(Tensor t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Dense layer: "+this->label+".");
             
@@ -124,7 +124,7 @@ class Dense : public Layer{
             }
         }
 
-        Tensor back_prop(Tensor& t_grads) override{
+        Tensor back_prop(Tensor t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Dense layer: "+this->label+".");
             
@@ -267,7 +267,7 @@ class Conv2D : public Layer{
             return (filters.size() * filters[0].size() * filters[0][0].size() * filters[0][0][0].size() + biases.size());
         }
 
-        Tensor forward(Tensor& t_input) override {
+        Tensor forward(Tensor t_input) override {
             if(!holds_alternative<Tensor3D>(t_input))
                 throw runtime_error("Invalid input Tensor to Conv2D layer: "+this->label+".");
             
@@ -289,7 +289,7 @@ class Conv2D : public Layer{
             return ans;
         }
         
-        Tensor back_prop(Tensor& t_grads) override{
+        Tensor back_prop(Tensor t_grads) override{
             if(!holds_alternative<Tensor3D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Conv2D layer: "+this->label+".");
             
@@ -370,7 +370,7 @@ class Flatten : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor& t_input) override  {
+        Tensor forward(Tensor t_input) override  {
             Tensor1D output;
             if(holds_alternative<Tensor1D>(t_input)){
                 const Tensor1D& input = std::get<Tensor1D>(t_input);
@@ -396,7 +396,7 @@ class Flatten : public Layer{
             return output;
         }
 
-        Tensor back_prop(Tensor& t_grads) override {
+        Tensor back_prop(Tensor t_grads) override {
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Flatten layer: "+this->label+".");
 
@@ -492,7 +492,7 @@ class MaxPool2D : public Layer {
         }
 
         // FIX: Pass input by const reference to avoid expensive copy
-        Tensor forward(Tensor& t_input) override  {
+        Tensor forward(Tensor t_input) override  {
             if (!holds_alternative<Tensor3D>(t_input))
                 throw invalid_argument("Invalid input Tensor to MaxPool2D layer: " + this->label);
 
@@ -535,7 +535,7 @@ class MaxPool2D : public Layer {
         }
 
         // FIX: Pass grads by const reference
-        Tensor back_prop(Tensor& t_grads) override {
+        Tensor back_prop(Tensor t_grads) override {
             if (!holds_alternative<Tensor3D>(t_grads))
                 throw invalid_argument("Invalid grads Tensor to MaxPool2D layer: " + this->label);
 
@@ -591,7 +591,7 @@ class Softmax : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor& t_input) override {
+        Tensor forward(Tensor t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw invalid_argument("Invalid input Tensor to Softmax layer: "+this->label+".");
 
@@ -614,7 +614,7 @@ class Softmax : public Layer{
             return op;
         }
 
-        Tensor back_prop(Tensor& t_grads) override{
+        Tensor back_prop(Tensor t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
             
@@ -675,7 +675,7 @@ class ReLU : public Layer {
             return 0;
         }
 
-        Tensor forward(Tensor& t_input) override  {
+        Tensor forward(Tensor t_input) override  {
             this->input_cache = t_input; // Store original input
             if(holds_alternative<Tensor1D>(t_input)){
                 Tensor1D& temp = std::get<Tensor1D>(t_input);
@@ -701,7 +701,7 @@ class ReLU : public Layer {
             return t_input;
         }
 
-        Tensor back_prop(Tensor& t_grads) override {
+        Tensor back_prop(Tensor t_grads) override {
             if(holds_alternative<Tensor1D>(t_grads)){
                 Tensor1D& temp = std::get<Tensor1D>(input_cache);
                 Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
@@ -737,3 +737,197 @@ class ReLU : public Layer {
             archive(cereal::base_class<Layer>(this)); 
         }
 };
+
+class Sigmoid : public Layer{
+    public:
+        Tensor input_cache;
+
+        Sigmoid() {}
+        Sigmoid(std::string label) {
+            this->label = label;
+        }
+
+        void compute_output_shape() override{
+            output_shape = input_shape;
+        }
+
+        int parameter_count() override{
+            return 0;
+        }
+
+        Tensor forward(Tensor t_input) override  {
+            this->input_cache = t_input; // Store original input
+            if(holds_alternative<Tensor1D>(t_input)){
+                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                for(auto& val: temp)
+                    val = 1 / (1 + exp(-val));
+            }
+            else if(holds_alternative<Tensor2D>(t_input)){
+                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                for(auto& row: temp)
+                    for(auto& val: row)
+                        val = 1 / (1 + exp(-val));
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(t_input);
+                for(auto& channel: temp)
+                    for(auto& row: channel)
+                        for(auto& val: row)
+                            val = 1 / (1 + exp(-val));
+            }
+            return t_input;
+        }
+
+        Tensor back_prop(Tensor t_grads) override {
+            if(holds_alternative<Tensor1D>(t_grads)){
+                Tensor1D& temp = std::get<Tensor1D>(input_cache);
+                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    double x = exp(-temp[i]);
+                    temp_grads[i] *= x / pow(1 + x, 2);
+                }
+            }
+            else if(holds_alternative<Tensor2D>(t_grads)){
+                Tensor2D& temp = std::get<Tensor2D>(input_cache);
+                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    for(int j=0 ; j < temp[i].size() ; j++){
+                        double x = exp(-temp[i][j]);
+                        temp_grads[i][j] *= x / pow(1 + x, 2);
+                    }
+                }
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(input_cache);
+                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    for(int j=0 ; j < temp[i].size() ; j++){
+                        for(int k=0 ; k < temp[i][j].size() ; k++){
+                            double x = exp(-temp[i][j][k]);
+                            temp_grads[i][j][k] *= x / pow(1 + x, 2);
+                        }
+                    }
+                }
+            }
+            return t_grads;
+        }
+
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
+};
+
+class Tanh : public Layer{
+    public:
+        Tensor input_cache;
+
+        Tanh() {}
+        Tanh(std::string label) {
+            this->label = label;
+        }
+
+        void compute_output_shape() override{
+            output_shape = input_shape;
+        }
+
+        int parameter_count() override{
+            return 0;
+        }
+
+        Tensor forward(Tensor t_input) override  {
+            this->input_cache = t_input; // Store original input
+            if(holds_alternative<Tensor1D>(t_input)){
+                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                for(auto& val: temp){
+                    val = exp(2*val);
+                    val = (val - 1) / (val + 1);
+                }
+            }
+            else if(holds_alternative<Tensor2D>(t_input)){
+                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                for(auto& row: temp){
+                    for(auto& val: row){
+                        val = exp(2*val);
+                        val = (val - 1) / (val + 1);
+                    }
+                }
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(t_input);
+                for(auto& channel: temp){
+                    for(auto& row: channel){
+                        for(auto& val: row){
+                            val = exp(2*val);
+                            val = (val - 1) / (val + 1);
+                        }
+                    }
+                }
+            }
+            return t_input;
+        }
+
+        Tensor back_prop(Tensor t_grads) override {
+            if(holds_alternative<Tensor1D>(t_grads)){
+                Tensor1D& temp = std::get<Tensor1D>(input_cache);
+                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    double x = exp(2*temp[i]);
+                    temp_grads[i] *= 4*x / pow(x*x + 2*x + 1, 2);
+                }
+            }
+            else if(holds_alternative<Tensor2D>(t_grads)){
+                Tensor2D& temp = std::get<Tensor2D>(input_cache);
+                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    for(int j=0 ; j < temp[i].size() ; j++){
+                        double x = exp(2*temp[i][j]);
+                        temp_grads[i][j] *= 4*x / pow(x*x + 2*x + 1, 2);
+                    }
+                }
+            }
+            else{
+                Tensor3D& temp = std::get<Tensor3D>(input_cache);
+                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                for(int i=0 ; i < temp.size() ; i++){
+                    for(int j=0 ; j < temp[i].size() ; j++){
+                        for(int k=0 ; k < temp[i][j].size() ; k++){
+                            double x = exp(2*temp[i][j][k]);
+                            temp_grads[i][j][k] *= 4*x / pow(x*x + 2*x + 1, 2);
+                        }
+                    }
+                }
+            }
+            return t_grads;
+        }
+
+        void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
+
+        template <class Archive>
+        void serialize(Archive& archive) {
+            // This is crucial: it calls the base class's serialize function
+            archive(cereal::base_class<Layer>(this)); 
+        }
+};
+
+
+// Serialization registration for layers for cereal library
+CEREAL_REGISTER_TYPE(Dense);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Dense);
+CEREAL_REGISTER_TYPE(Conv2D);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Conv2D);
+CEREAL_REGISTER_TYPE(MaxPool2D);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, MaxPool2D);
+CEREAL_REGISTER_TYPE(ReLU);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, ReLU);
+CEREAL_REGISTER_TYPE(Softmax);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Softmax);
+CEREAL_REGISTER_TYPE(Flatten);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Flatten);
+CEREAL_REGISTER_TYPE(Sigmoid);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Sigmoid);
+CEREAL_REGISTER_TYPE(Tanh);
+CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Tanh);

@@ -196,6 +196,48 @@ public:
     }
 };
 
+// Strategy for a Sigmoid layer
+class SigmoidInitializer : public InitializerStrategy {
+public:
+    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
+        // Safely downcast the pointer to the concrete Sigmoid type
+        Sigmoid* sigmoid_layer = dynamic_cast<Sigmoid*>(current_layer);
+        if (!sigmoid_layer) return; // Or throw an error
+
+        // The magic happens here:
+        // 1. Get the previous layer's output shape
+        const Shape& prev_output_shape = previous_layer->output_shape;
+
+        // 2. Set the current layer's input shape
+        sigmoid_layer->input_shape = prev_output_shape;
+        
+        // 3. (Important!) Tell the layer to initialize its internal weights
+        //    and compute its own output shape based on the new input shape.
+        sigmoid_layer->compute_output_shape();
+    }
+};
+
+// Strategy for a Tanh layer
+class TanhInitializer : public InitializerStrategy {
+public:
+    void initialize(Layer* current_layer, const Layer* previous_layer) const override {
+        // Safely downcast the pointer to the concrete Sigmoid type
+        Tanh* tanh_layer = dynamic_cast<Tanh*>(current_layer);
+        if (!tanh_layer) return; // Or throw an error
+
+        // The magic happens here:
+        // 1. Get the previous layer's output shape
+        const Shape& prev_output_shape = previous_layer->output_shape;
+
+        // 2. Set the current layer's input shape
+        tanh_layer->input_shape = prev_output_shape;
+        
+        // 3. (Important!) Tell the layer to initialize its internal weights
+        //    and compute its own output shape based on the new input shape.
+        tanh_layer->compute_output_shape();
+    }
+};
+
 Initializer GlobalInitializerStrategies = [] {
     Initializer init; // Create a temporary Initializer
 
@@ -206,23 +248,11 @@ Initializer GlobalInitializerStrategies = [] {
     init.register_strategy<MaxPool2D>(std::make_unique<MaxPool2DInitializer>());
     init.register_strategy<ReLU>(std::make_unique<ReLUInitializer>());
     init.register_strategy<Softmax>(std::make_unique<SoftmaxInitializer>());
+    init.register_strategy<Sigmoid>(std::make_unique<SigmoidInitializer>());
+    init.register_strategy<Tanh>(std::make_unique<TanhInitializer>());
     // ... add more strategies ...
 
     // Return the fully configured object.
     // This will be "moved" into G_Initializer efficiently.
     return init; 
 }(); // The () at the end immediately calls the lambda.
-
-
-CEREAL_REGISTER_TYPE(Dense);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Dense);
-CEREAL_REGISTER_TYPE(Conv2D);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Conv2D);
-CEREAL_REGISTER_TYPE(MaxPool2D);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, MaxPool2D);
-CEREAL_REGISTER_TYPE(ReLU);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, ReLU);
-CEREAL_REGISTER_TYPE(Softmax);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Softmax);
-CEREAL_REGISTER_TYPE(Flatten);
-CEREAL_REGISTER_POLYMORPHIC_RELATION(Layer, Flatten);

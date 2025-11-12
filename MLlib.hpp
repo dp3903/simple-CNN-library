@@ -84,7 +84,7 @@ class Model{
             return grads;
         }
 
-        vector<double> train(Batch batch, int iterations=1, double learning_rate=0.1){
+        vector<double> train(Batch batch, int iterations=1){
             vector<double> loses = vector<double>(iterations);
             // cout<<"\n===============Batch Training Starting===============\n";
             for(int i=0 ; i < iterations ; i++){
@@ -92,8 +92,8 @@ class Model{
                 for(pair<Tensor,Tensor> sample : batch){
                     Tensor op = this->run(sample.first);
                 
-                    iteration_loss += this->loss->calculate(op,sample.second);
-                    Tensor op_grads = (op - sample.second) / size(op);
+                    auto [loss, op_grads] = this->loss->calculate(op,sample.second);
+                    iteration_loss += loss;
                     this->back(op_grads);
 
                     
