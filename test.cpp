@@ -340,7 +340,7 @@ void testing_CNN(){
         new Softmax("softmax1")
     });
 
-    Adam optim = Adam(test_model.layers, 0.1);
+    Adam optim = Adam(test_model.layers, 0.01);
 
     cout<<"Input shape: "<<test_model.layers[0]->input_shape<<endl;
     int n_epochs = 5;
@@ -547,7 +547,7 @@ void testing_GAN(){
     Adam gen_optim = Adam(generator.layers, 0.0002, 0.5);
     Adam desc_optim = Adam(descriminator.layers, 0.0002, 0.5);
     
-    int n_epochs = 100;
+    int n_epochs = 10;
     int n_desc_iterations_per_batch = 1;
     int batch_size = 100;
     int dataset_size = 1000;
@@ -783,8 +783,8 @@ int main(){
     // testing_image_display();
 
     // testing simple linear GAN
-    // testing_GAN();
+    testing_GAN();
 
     // testing custom model
-    testing_custom_model();
+    // testing_custom_model();
 }

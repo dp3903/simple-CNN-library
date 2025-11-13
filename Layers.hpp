@@ -26,11 +26,11 @@ class Layer{
             this->label = name;
         }
 
-        virtual Tensor forward(Tensor input){
+        virtual Tensor forward(Tensor& input){
             throw runtime_error("Invalid input for layer: "+this->label+".");
         }
 
-        virtual Tensor back_prop(Tensor grads){
+        virtual Tensor back_prop(Tensor& grads){
             throw runtime_error("Invalid gradients for layer: "+this->label+".");
         }
         
@@ -90,7 +90,7 @@ class Dense : public Layer{
             return (input_shape.width * output_shape.width + output_shape.width);
         }
 
-        Tensor forward(Tensor t_input) override {
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw runtime_error("Invalid input Tensor to Dense layer: "+this->label+".");
             
@@ -124,7 +124,7 @@ class Dense : public Layer{
             }
         }
 
-        Tensor back_prop(Tensor t_grads) override{
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Dense layer: "+this->label+".");
             
@@ -267,7 +267,7 @@ class Conv2D : public Layer{
             return (filters.size() * filters[0].size() * filters[0][0].size() * filters[0][0][0].size() + biases.size());
         }
 
-        Tensor forward(Tensor t_input) override {
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor3D>(t_input))
                 throw runtime_error("Invalid input Tensor to Conv2D layer: "+this->label+".");
             
@@ -289,7 +289,7 @@ class Conv2D : public Layer{
             return ans;
         }
         
-        Tensor back_prop(Tensor t_grads) override{
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor3D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Conv2D layer: "+this->label+".");
             
@@ -370,7 +370,7 @@ class Flatten : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor t_input) override  {
+        Tensor forward(Tensor& t_input) override  {
             Tensor1D output;
             if(holds_alternative<Tensor1D>(t_input)){
                 const Tensor1D& input = std::get<Tensor1D>(t_input);
@@ -396,7 +396,7 @@ class Flatten : public Layer{
             return output;
         }
 
-        Tensor back_prop(Tensor t_grads) override {
+        Tensor back_prop(Tensor& t_grads) override {
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid gradient Tensor to Flatten layer: "+this->label+".");
 
@@ -492,7 +492,7 @@ class MaxPool2D : public Layer {
         }
 
         // FIX: Pass input by const reference to avoid expensive copy
-        Tensor forward(Tensor t_input) override  {
+        Tensor forward(Tensor& t_input) override  {
             if (!holds_alternative<Tensor3D>(t_input))
                 throw invalid_argument("Invalid input Tensor to MaxPool2D layer: " + this->label);
 
@@ -535,7 +535,7 @@ class MaxPool2D : public Layer {
         }
 
         // FIX: Pass grads by const reference
-        Tensor back_prop(Tensor t_grads) override {
+        Tensor back_prop(Tensor& t_grads) override {
             if (!holds_alternative<Tensor3D>(t_grads))
                 throw invalid_argument("Invalid grads Tensor to MaxPool2D layer: " + this->label);
 
@@ -591,7 +591,7 @@ class Softmax : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor t_input) override {
+        Tensor forward(Tensor& t_input) override {
             if(!holds_alternative<Tensor1D>(t_input))
                 throw invalid_argument("Invalid input Tensor to Softmax layer: "+this->label+".");
 
@@ -614,11 +614,11 @@ class Softmax : public Layer{
             return op;
         }
 
-        Tensor back_prop(Tensor t_grads) override{
+        Tensor back_prop(Tensor& t_grads) override{
             if(!holds_alternative<Tensor1D>(t_grads))
                 throw runtime_error("Invalid input Tensor to Softmax layer: "+this->label+".");
             
-            const Tensor1D& grads = std::get<Tensor1D>(t_grads);
+            const Tensor1D grads = std::get<Tensor1D>(t_grads);
             if(!grads.size())
                 throw runtime_error("Cannot backprop on empty grads for layer: "+this->label+".");
             if(grads.size() != input.size())
@@ -675,58 +675,66 @@ class ReLU : public Layer {
             return 0;
         }
 
-        Tensor forward(Tensor t_input) override  {
+        Tensor forward(Tensor& t_input) override  {
             this->input_cache = t_input; // Store original input
+            Tensor op;
             if(holds_alternative<Tensor1D>(t_input)){
-                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                Tensor1D temp = std::get<Tensor1D>(t_input);
                 for(auto& val: temp)
                     if(val < 0)
                         val = 0;
+                op = temp;
             }
             else if(holds_alternative<Tensor2D>(t_input)){
-                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                Tensor2D temp = std::get<Tensor2D>(t_input);
                 for(auto& row: temp)
                     for(auto& val: row)
                         if(val < 0)
                             val = 0;
+                op = temp;
             }
             else{
                 Tensor3D& temp = std::get<Tensor3D>(t_input);
-                for(auto& channel: temp)
+                for(auto channel: temp)
                     for(auto& row: channel)
                         for(auto& val: row)
                             if(val < 0)
                                 val = 0;
+                op = temp;
             }
-            return t_input;
+            return op;
         }
 
-        Tensor back_prop(Tensor t_grads) override {
+        Tensor back_prop(Tensor& t_grads) override {
+            Tensor ip_grads;
             if(holds_alternative<Tensor1D>(t_grads)){
                 Tensor1D& temp = std::get<Tensor1D>(input_cache);
-                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                Tensor1D temp_grads = std::get<Tensor1D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++)
                     if(temp[i] <= 0)
                         temp_grads[i] = 0;
+                ip_grads = temp_grads;
             }
             else if(holds_alternative<Tensor2D>(t_grads)){
                 Tensor2D& temp = std::get<Tensor2D>(input_cache);
-                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                Tensor2D temp_grads = std::get<Tensor2D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++)
                     for(int j=0 ; j < temp[i].size() ; j++)
                         if(temp[i][j] <= 0)
                             temp_grads[i][j] = 0;
+                ip_grads = temp_grads;
             }
             else{
                 Tensor3D& temp = std::get<Tensor3D>(input_cache);
-                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                Tensor3D temp_grads = std::get<Tensor3D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++)
                     for(int j=0 ; j < temp[i].size() ; j++)
                         for(int k=0 ; k < temp[i][j].size() ; k++)
                             if(temp[i][j][k] <= 0)
                                 temp_grads[i][j][k] = 0;
+                ip_grads = temp_grads;
             }
-            return t_grads;
+            return ip_grads;
         }
 
         void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
@@ -755,51 +763,58 @@ class Sigmoid : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor t_input) override  {
+        Tensor forward(Tensor& t_input) override  {
             this->input_cache = t_input; // Store original input
+            Tensor op;
             if(holds_alternative<Tensor1D>(t_input)){
-                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                Tensor1D temp = std::get<Tensor1D>(t_input);
                 for(auto& val: temp)
                     val = 1 / (1 + exp(-val));
+                op = temp;
             }
             else if(holds_alternative<Tensor2D>(t_input)){
-                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                Tensor2D temp = std::get<Tensor2D>(t_input);
                 for(auto& row: temp)
                     for(auto& val: row)
                         val = 1 / (1 + exp(-val));
+                op = temp;
             }
             else{
-                Tensor3D& temp = std::get<Tensor3D>(t_input);
+                Tensor3D temp = std::get<Tensor3D>(t_input);
                 for(auto& channel: temp)
                     for(auto& row: channel)
                         for(auto& val: row)
                             val = 1 / (1 + exp(-val));
+                op = temp;
             }
-            return t_input;
+            return op;
         }
 
-        Tensor back_prop(Tensor t_grads) override {
+        Tensor back_prop(Tensor& t_grads) override {
+            Tensor ip_grads;
             if(holds_alternative<Tensor1D>(t_grads)){
                 Tensor1D& temp = std::get<Tensor1D>(input_cache);
-                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                Tensor1D temp_grads = std::get<Tensor1D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     double x = exp(-temp[i]);
                     temp_grads[i] *= x / pow(1 + x, 2);
                 }
+                ip_grads = temp_grads;
             }
             else if(holds_alternative<Tensor2D>(t_grads)){
                 Tensor2D& temp = std::get<Tensor2D>(input_cache);
-                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                Tensor2D temp_grads = std::get<Tensor2D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     for(int j=0 ; j < temp[i].size() ; j++){
                         double x = exp(-temp[i][j]);
                         temp_grads[i][j] *= x / pow(1 + x, 2);
                     }
                 }
+                ip_grads = temp_grads;
             }
             else{
                 Tensor3D& temp = std::get<Tensor3D>(input_cache);
-                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                Tensor3D temp_grads = std::get<Tensor3D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     for(int j=0 ; j < temp[i].size() ; j++){
                         for(int k=0 ; k < temp[i][j].size() ; k++){
@@ -808,8 +823,9 @@ class Sigmoid : public Layer{
                         }
                     }
                 }
+                ip_grads = temp_grads;
             }
-            return t_grads;
+            return ip_grads;
         }
 
         void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
@@ -838,26 +854,29 @@ class Tanh : public Layer{
             return 0;
         }
 
-        Tensor forward(Tensor t_input) override  {
+        Tensor forward(Tensor& t_input) override  {
             this->input_cache = t_input; // Store original input
+            Tensor op;
             if(holds_alternative<Tensor1D>(t_input)){
-                Tensor1D& temp = std::get<Tensor1D>(t_input);
+                Tensor1D temp = std::get<Tensor1D>(t_input);
                 for(auto& val: temp){
                     val = exp(2*val);
                     val = (val - 1) / (val + 1);
                 }
+                op = temp;
             }
             else if(holds_alternative<Tensor2D>(t_input)){
-                Tensor2D& temp = std::get<Tensor2D>(t_input);
+                Tensor2D temp = std::get<Tensor2D>(t_input);
                 for(auto& row: temp){
                     for(auto& val: row){
                         val = exp(2*val);
                         val = (val - 1) / (val + 1);
                     }
                 }
+                op = temp;
             }
             else{
-                Tensor3D& temp = std::get<Tensor3D>(t_input);
+                Tensor3D temp = std::get<Tensor3D>(t_input);
                 for(auto& channel: temp){
                     for(auto& row: channel){
                         for(auto& val: row){
@@ -866,32 +885,36 @@ class Tanh : public Layer{
                         }
                     }
                 }
+                op = temp;
             }
-            return t_input;
+            return op;
         }
 
-        Tensor back_prop(Tensor t_grads) override {
+        Tensor back_prop(Tensor& t_grads) override {
+            Tensor ip_grads;
             if(holds_alternative<Tensor1D>(t_grads)){
                 Tensor1D& temp = std::get<Tensor1D>(input_cache);
-                Tensor1D& temp_grads = std::get<Tensor1D>(t_grads);
+                Tensor1D temp_grads = std::get<Tensor1D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     double x = exp(2*temp[i]);
                     temp_grads[i] *= 4*x / pow(x*x + 2*x + 1, 2);
                 }
+                ip_grads = temp_grads;
             }
             else if(holds_alternative<Tensor2D>(t_grads)){
                 Tensor2D& temp = std::get<Tensor2D>(input_cache);
-                Tensor2D& temp_grads = std::get<Tensor2D>(t_grads);
+                Tensor2D temp_grads = std::get<Tensor2D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     for(int j=0 ; j < temp[i].size() ; j++){
                         double x = exp(2*temp[i][j]);
                         temp_grads[i][j] *= 4*x / pow(x*x + 2*x + 1, 2);
                     }
                 }
+                ip_grads = temp_grads;
             }
             else{
                 Tensor3D& temp = std::get<Tensor3D>(input_cache);
-                Tensor3D& temp_grads = std::get<Tensor3D>(t_grads);
+                Tensor3D temp_grads = std::get<Tensor3D>(t_grads);
                 for(int i=0 ; i < temp.size() ; i++){
                     for(int j=0 ; j < temp[i].size() ; j++){
                         for(int k=0 ; k < temp[i][j].size() ; k++){
@@ -900,8 +923,9 @@ class Tanh : public Layer{
                         }
                     }
                 }
+                ip_grads = temp_grads;
             }
-            return t_grads;
+            return ip_grads;
         }
 
         void update_weights(const std::function<void(Value&, int&)>& visitor) override {}
